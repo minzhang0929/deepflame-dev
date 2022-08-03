@@ -36,6 +36,8 @@ Description
 #include "dfChemistryModel.H"
 #include "CanteraMixture.H"
 #include "hePsiThermo.H"
+#include <torch/script.h>
+#include "GpuInference/GpuInference.H"
 
 #include "fvCFD.H"
 #include "fluidThermo.H"

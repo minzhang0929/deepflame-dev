@@ -52,8 +52,13 @@ SourceFiles
 #include "loadBalancing/RecvBuffer.H"
 #include "loadBalancing/SendBuffer.H"
 #include "loadBalancing/LoadBalancer.H"
+#include "GpuInference/GpuInference.H"
+#include "GpuInference/GpuProblem.H"
+#include "GpuInference/GpuSolution.H"
 #include "OFstream.H"
 #include "IOmanip.H"
+#include "PstreamGlobals.H"
+
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
@@ -115,8 +120,10 @@ public IOdictionary
     scalarList Xstd_;
     scalarList Ymu_;
     scalarList Ystd_;
-    scalar Tact_;
+    scalar Tact_low;
+    scalar Tact_high;
     scalar Qdotact_;
+    GpuInference CUDA_;
 
     // Load balancing object
     LoadBalancer balancer_;
@@ -144,6 +151,15 @@ public IOdictionary
 
         template<class DeltaTType>
         scalar torchSolve(const DeltaTType& deltaT);
+
+        template<class DeltaTType>
+        scalar torchCUDAoneCoreSimplestSolve(const DeltaTType& deltaT);
+
+        template<class DeltaTType>
+        scalar torchCUDAoneCoreSolve(const DeltaTType& deltaT);
+        
+        template<class DeltaTType>
+        scalar torchCUDASolve(const DeltaTType& deltaT);
 
 public:
 

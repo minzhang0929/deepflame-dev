@@ -36,7 +36,7 @@ conda create -n libcantera
 
 conda activate libcantera
 
-conda install -c conda-forge boost fmt libcantera-devel
+conda install -c conda-forge cantera libcantera-devel
 ```
 Note: Check your Miniconda3/envs/libcantera directory and make sure the install was successful (lib/ include/ etc. exist).
 
@@ -69,7 +69,7 @@ source $HOME/deepflame-dev/bashrc
 ```
 3. Go to an example case directory, for example:
 ```
-cd $HOME/deepflame-dev/examples/zeroD_cubicReactor/H2/cvodeSolver
+cd $HOME/deepflame-dev/examples/df0DFoam/zeroD_cubicReactor/H2/cvodeSolver
 
 ./Allrun
 ```

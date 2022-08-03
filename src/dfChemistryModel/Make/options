@@ -1,4 +1,7 @@
+-include $(GENERAL_RULES)/mplibType
+
 EXE_INC = -std=c++14 \
+    $(PFLAGS) $(PINC) \
     -I$(LIB_SRC)/transportModels/compressible/lnInclude \
     -I$(LIB_SRC)/thermophysicalModels/basic/lnInclude \
     -I$(LIB_SRC)/TurbulenceModels/turbulenceModels/lnInclude \
@@ -7,7 +10,9 @@ EXE_INC = -std=c++14 \
     -I$(DF_SRC)/CanteraMixture/lnInclude \
     -I$(CANTERA_ROOT)/include \
     -I$(TORCH_ROOT)/include \
-    -I$(TORCH_ROOT)/include/torch/csrc/api/include
+    -I$(LIB_SRC)/Pstream/mpi \
+    -I$(TORCH_ROOT)/include/torch/csrc/api/include \
+    -I/usr/local/cuda/include
 
 EXE_LIBS = \
     -lcompressibleTransportModels \
@@ -19,5 +24,6 @@ EXE_LIBS = \
     $(CANTERA_ROOT)/lib/libcantera.so \
     $(TORCH_ROOT)/lib/libtorch.so \
     $(TORCH_ROOT)/lib/libc10.so \
+    $(LIB_SRC)/GpuInference/build/libGpuInference.so \
     -rdynamic \
     -lpthread
