@@ -42,7 +42,7 @@ namespace Foam
     typedef                                                                    \
         CThermo                                                                \
         <                                                                      \
-            ThermoPhys,                                                        \
+            ThermoPhys::composite,                                             \
             Mixture                                                            \
         >                                                                      \
         CThermo##Mixture##ThermoPhys;                                          \
@@ -50,7 +50,7 @@ namespace Foam
     defineTemplateTypeNameAndDebugWithName                                     \
     (                                                                          \
         CThermo##Mixture##ThermoPhys,                                          \
-        (#CThermo"<" + Mixture::typeName() + ">").c_str(),                     \
+        (#CThermo"<" + Mixture::typeName() + "111>").c_str(),                  \
         0                                                                      \
     )
 

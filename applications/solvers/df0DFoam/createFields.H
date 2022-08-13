@@ -2,7 +2,7 @@
 
 Info<< "Reading thermophysical properties\n" << endl;
 
-fluidThermo* pThermo = new hePsiThermo<psiThermo, CanteraMixture>(mesh, word::null);
+fluidThermo* pThermo = new hePsiThermo<psiThermo::composite, CanteraMixture>(mesh, word::null);
 fluidThermo& thermo = *pThermo;
 
 thermo.validate(args.executable(), "ha");
@@ -50,14 +50,14 @@ volVectorField U
 
 #include "compressibleCreatePhi.H"
 
-pressureControl pressureControl(p, rho, pimple.dict(), false);
+pressureReference pressureReference(p, rho, pimple.dict(), false);
 
-mesh.setFluxRequired(p.name());
+mesh.schemes().setFluxRequired(p.name());
 
 Info<< "Creating turbulence model\n" << endl;
-autoPtr<compressible::turbulenceModel> turbulence
+autoPtr<compressible::momentumTransportModel> turbulence
 (
-    compressible::turbulenceModel::New
+    compressible::momentumTransportModel::New
     (
         rho,
         U,
@@ -89,7 +89,7 @@ multivariateSurfaceInterpolationScheme<scalar>::fieldTable fields;
 
 
 
-dfChemistryModel<basicThermo> chemistry(thermo);
+dfChemistryModel<fluidThermo> chemistry(thermo);
 PtrList<volScalarField>& Y = chemistry.Y();
 const word inertSpecie(chemistry.lookup("inertSpecie"));
 const label inertIndex(chemistry.species()[inertSpecie]);

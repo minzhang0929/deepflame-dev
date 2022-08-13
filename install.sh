@@ -23,16 +23,20 @@ sed -i s#TORCH_DIR#$TORCH_DIR#g ./bashrc
 if [ -d "src_orig" ]; then
     echo "src_orig exist."
 else
-    mkdir -p src_orig/TurbulenceModels
+    mkdir -p src_orig/MomentumTransportModels
     mkdir -p src_orig/thermophysicalModels
+    mkdir -p src_orig/thermophysicalModels/specie
+    mkdir -p src_orig/fvModels
     mkdir -p src_orig/lagrangian
-    mkdir -p src_orig/regionModels
-    cp -r $FOAM_SRC/TurbulenceModels/compressible src_orig/TurbulenceModels
+    #mkdir -p src_orig/regionModels
+    cp -r $FOAM_SRC/MomentumTransportModels/compressible src_orig/MomentumTransportModels
     cp -r $FOAM_SRC/thermophysicalModels/basic src_orig/thermophysicalModels
     cp -r $FOAM_SRC/thermophysicalModels/thermophysicalProperties src_orig/thermophysicalModels
-    cp -r $FOAM_SRC/lagrangian/intermediate src_orig/lagrangian
-    cp -r $FOAM_SRC/lagrangian/turbulence src_orig/lagrangian
-    cp -r $FOAM_SRC/regionModels/surfaceFilmModels src_orig/regionModels
+    cp -r $FOAM_SRC/thermophysicalModels/specie/thermophysicalFunctions/ src_orig/thermophysicalModels/specie
+    cp -r $FOAM_SRC/fvModels src_orig
+    cp -r $FOAM_SRC/lagrangian/parcel src_orig/lagrangian
+    cp -r $FOAM_SRC/lagrangian/parcelTurbulence src_orig/lagrangian
+    #cp -r $FOAM_SRC/regionModels/surfaceFilmModels src_orig/regionModels
 fi
 
 

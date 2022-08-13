@@ -39,10 +39,12 @@ Description
 
 #include "fvCFD.H"
 #include "fluidThermo.H"
-#include "turbulentFluidThermoModel.H"
+#include "compressibleMomentumTransportModels.H"
 #include "pimpleControl.H"
-#include "pressureControl.H"
+#include "pressureReference.H"
 #include "localEulerDdtScheme.H"
+#include "CorrectPhi.H"
+#include "fvModels.H"
 #include "fvcSmooth.H"
 #include "PstreamGlobals.H"
 
@@ -81,6 +83,19 @@ int main(int argc, char *argv[])
     {
         #include "readDyMControls.H"
 
+        // Store divrhoU from the previous mesh so that it can be mapped
+        // and used in correctPhi to ensure the corrected phi has the
+        // same divergence
+        autoPtr<volScalarField> divrhoU;
+        if (correctPhi)
+        {
+            divrhoU = new volScalarField
+            (
+                "divrhoU",
+                fvc::div(fvc::absolute(phi, rho, U))
+            );
+        }
+
         if (LTS)
         {
             #include "setRDeltaT.H"
@@ -91,26 +106,52 @@ int main(int argc, char *argv[])
             #include "setDeltaT.H"
         }
 
+        fvModels.preUpdateMesh();
+
+        // Store momentum to set rhoUf for introduced faces.
+        autoPtr<volVectorField> rhoU;
+        if (rhoUf.valid())
+        {
+            rhoU = new volVectorField("rhoU", rho*U);
+        }
+
+        // Update the mesh for topology change, mesh to mesh mapping
+        mesh.update();
+
         runTime++;
 
-        Info<< "Time = " << runTime.timeName() << nl << endl;
+        Info<< "Time = " << runTime.userTimeName() << nl << endl;
 
         // --- Pressure-velocity PIMPLE corrector loop
         while (pimple.loop())
         {
             if (pimple.firstPimpleIter() || moveMeshOuterCorrectors)
             {
-                // Store momentum to set rhoUf for introduced faces.
-                autoPtr<volVectorField> rhoU;
-                if (rhoUf.valid())
+                // Move the mesh
+                mesh.move();
+
+                if (mesh.changing())
                 {
-                    rhoU = new volVectorField("rhoU", rho*U);
+                    if (correctPhi)
+                    {
+                        #include "correctPhi.H"
+                    }
+
+                    if (checkMeshCourantNo)
+                    {
+                        #include "meshCourantNo.H"
+                    }
                 }
             }
 
             if (pimple.firstPimpleIter() && !pimple.simpleRho())
             {
                 #include "rhoEqn.H"
+            }
+
+            if (pimple.models())
+            {
+                fvModels.correct();
             }
 
             start = std::clock();
@@ -128,14 +169,7 @@ int main(int argc, char *argv[])
             start = std::clock();
             while (pimple.correct())
             {
-                if (pimple.consistent())
-                {
-                    #include "pcEqn.H"
-                }
-                else
-                {
-                    #include "pEqn.H"
-                }
+                #include "pEqn.H"
             }
             end = std::clock();
             time_monitor_flow += double(end - start) / double(CLOCKS_PER_SEC);

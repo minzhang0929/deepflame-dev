@@ -14,7 +14,7 @@ if (!inviscid)
     solve
     (
         fvm::ddt(rho, U) - fvc::ddt(rho, U)
-      - fvm::laplacian(turbulence->muEff(), U)
+      - fvm::laplacian(turbulence->nuEff()*rho, U)
       - fvc::div(tauMC)
     );
     rhoU = rho*U;

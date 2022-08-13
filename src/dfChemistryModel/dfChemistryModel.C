@@ -42,8 +42,8 @@ Foam::dfChemistryModel<ThermoType>::dfChemistryModel
         IOobject
         (
             "CanteraTorchProperties",
-            thermo.db().time().constant(),
-            thermo.db(),
+            thermo.T().time().constant(),
+            thermo.T().mesh(),
             IOobject::MUST_READ_IF_MODIFIED,
             IOobject::NO_WRITE
         )
@@ -64,7 +64,9 @@ Foam::dfChemistryModel<ThermoType>::dfChemistryModel
     hrtTemp_(mixture_.nSpecies()),
     cTemp_(mixture_.nSpecies()),
     RR_(mixture_.nSpecies()),
-    alpha_(const_cast<volScalarField&>(thermo.alpha())),
+    //alpha_(const_cast<volScalarField&>(thermo.alphahe())),
+    kappa_(const_cast<volScalarField&>(thermo.kappa())),
+    //Cp_(const_cast<volScalarField&>(thermo.Cp())),
     T_(thermo.T()),
     p_(thermo.p()),
     rho_(mesh_.objectRegistry::lookupObject<volScalarField>("rho")),
@@ -84,7 +86,7 @@ Foam::dfChemistryModel<ThermoType>::dfChemistryModel
         dimensionedScalar(dimEnergy/dimVolume/dimTime, 0)
     ),
     torchSwitch_(lookupOrDefault("torch", false)),
-    balancer_(createBalancer()), 
+    balancer_(createBalancer()),
     cpuTimes_
     (
         IOobject
@@ -180,7 +182,7 @@ Foam::dfChemistryModel<ThermoType>::dfChemistryModel
     {
         cpuSolveFile_ = logFile("cpu_solve.out");
         cpuSolveFile_() << "                  time" << tab
-                        << "           getProblems" << tab  
+                        << "           getProblems" << tab
                         << "           updateState" << tab
                         << "               balance" << tab
                         << "           solveBuffer" << tab
@@ -503,16 +505,19 @@ void Foam::dfChemistryModel<ThermoType>::correctThermo()
 
         mu_[celli] = mixture_.CanteraTransport()->viscosity(); // Pa-s
 
-        alpha_[celli] = mixture_.CanteraTransport()->thermalConductivity()/(CanteraGas_->cp_mass()); // kg/(m*s)
+        //alpha_[celli] = mixture_.CanteraTransport()->thermalConductivity()/(CanteraGas_->cp_mass()); // kg/(m*s)
         // thermalConductivity() W/m/K
         // cp_mass()   J/kg/K
+
+        kappa_[celli] = mixture_.CanteraTransport()->thermalConductivity();
 
 
         if (mixture_.transportModelName() == "UnityLewis")
         {
             forAll(rhoD_, i)
             {
-                rhoD_[i][celli] = alpha_[celli];
+                //rhoD_[i][celli] = alpha_[celli];
+                rhoD_[i][celli] = kappa_[celli]/CanteraGas_->cp_mass();
             }
         }
         else
@@ -545,7 +550,8 @@ void Foam::dfChemistryModel<ThermoType>::correctThermo()
 
     volScalarField::Boundary& muBf = mu_.boundaryFieldRef();
 
-    volScalarField::Boundary& alphaBf = alpha_.boundaryFieldRef();
+    //volScalarField::Boundary& alphaBf = alpha_.boundaryFieldRef();
+    volScalarField::Boundary& kappaBf = kappa_.boundaryFieldRef();
 
     forAll(T_.boundaryField(), patchi)
     {
@@ -555,7 +561,8 @@ void Foam::dfChemistryModel<ThermoType>::correctThermo()
         fvPatchScalarField& ppsi = psiBf[patchi];
         fvPatchScalarField& ph = hBf[patchi];
         fvPatchScalarField& pmu = muBf[patchi];
-        fvPatchScalarField& palpha = alphaBf[patchi];
+        //fvPatchScalarField& palpha = alphaBf[patchi];
+        fvPatchScalarField& pkappa = kappaBf[patchi];
 
         if (pT.fixesValue())
         {
@@ -573,12 +580,15 @@ void Foam::dfChemistryModel<ThermoType>::correctThermo()
 
                 pmu[facei] = mixture_.CanteraTransport()->viscosity();
 
-                palpha[facei] = mixture_.CanteraTransport()->thermalConductivity()/(CanteraGas_->cp_mass());
+                //palpha[facei] = mixture_.CanteraTransport()->thermalConductivity()/(CanteraGas_->cp_mass());
+                pkappa[facei] = mixture_.CanteraTransport()->thermalConductivity();
+
                 if (mixture_.transportModelName() == "UnityLewis")
                 {
                     forAll(rhoD_, i)
                     {
-                        rhoD_[i].boundaryFieldRef()[patchi][facei] = palpha[facei];
+                        //rhoD_[i].boundaryFieldRef()[patchi][facei] = palpha[facei];
+                        rhoD_[i].boundaryFieldRef()[patchi][facei] = pkappa[facei]/CanteraGas_->cp_mass();
                     }
                 }
                 else
@@ -613,13 +623,15 @@ void Foam::dfChemistryModel<ThermoType>::correctThermo()
 
                 pmu[facei] = mixture_.CanteraTransport()->viscosity();
 
-                palpha[facei] = mixture_.CanteraTransport()->thermalConductivity()/(CanteraGas_->cp_mass());
+                //palpha[facei] = mixture_.CanteraTransport()->thermalConductivity()/(CanteraGas_->cp_mass());
+                pkappa[facei] = mixture_.CanteraTransport()->thermalConductivity();
 
                 if (mixture_.transportModelName() == "UnityLewis")
                 {
                     forAll(rhoD_, i)
                     {
-                        rhoD_[i].boundaryFieldRef()[patchi][facei] = palpha[facei];
+                        //rhoD_[i].boundaryFieldRef()[patchi][facei] = palpha[facei];
+                        rhoD_[i].boundaryFieldRef()[patchi][facei] = pkappa[facei]/CanteraGas_->cp_mass();
                     }
                 }
                 else
@@ -719,7 +731,7 @@ Foam::dfChemistryModel<ThermoType>::getProblems
 
             solved_problems[celli] = problem;
         }
-        
+
     }
 
     return solved_problems;
@@ -800,8 +812,8 @@ Foam::dfChemistryModel<ThermoType>::createBalancer()
             IOobject
             (
                 "CanteraTorchProperties",
-                thermo_.db().time().constant(),
-                thermo_.db(),
+                thermo_.T().time().constant(),
+                thermo_.T().mesh(),
                 IOobject::MUST_READ,
                 IOobject::NO_WRITE,
                 false
@@ -872,7 +884,7 @@ Foam::scalar Foam::dfChemistryModel<ThermoType>::solve_loadBalance
     {
         balancer_.printState();
         cpuSolveFile_() << setw(22)
-                        << this->time().timeOutputValue()<<tab
+                        << this->time().userTimeValue()<<tab
                         << setw(22) << t_getProblems<<tab
                         << setw(22) << t_updateState<<tab
                         << setw(22) << t_balance<<tab

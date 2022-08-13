@@ -3,11 +3,14 @@
 tmp<fvVectorMatrix> tUEqn
 (
     fvm::ddt(rho, U) + fvm::div(phi, U)
-  + turbulence->divDevRhoReff(U)
+  + turbulence->divDevTau(U)
+ ==
+    fvModels.source(rho, U)
 );
 fvVectorMatrix& UEqn = tUEqn.ref();
 
 UEqn.relax();
+
 
 if (pimple.momentumPredictor())
 {

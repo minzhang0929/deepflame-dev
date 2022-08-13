@@ -37,11 +37,10 @@ Description
 #include "hePsiThermo.H"
 
 #include "fvCFD.H"
-#include "dynamicFvMesh.H"
 #include "fluidThermo.H"
-#include "turbulentFluidThermoModel.H"
+#include "compressibleMomentumTransportModels.H"
 #include "pimpleControl.H"
-#include "pressureControl.H"
+#include "pressureReference.H"
 // #include "CorrectPhi.H"
 //#include "fvOptions.H"
 #include "localEulerDdtScheme.H"
@@ -55,7 +54,7 @@ int main(int argc, char *argv[])
 
     #include "setRootCaseLists.H"
     #include "createTime.H"
-    #include "createDynamicFvMesh.H"
+    #include "createMesh.H"
     #include "createDyMControls.H"
     #include "initContinuityErrs.H"
     #include "createFields.H"

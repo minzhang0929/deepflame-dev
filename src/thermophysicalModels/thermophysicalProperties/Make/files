@@ -1,19 +1,4 @@
 workDir=$(SRC_ORIG)/thermophysicalModels/thermophysicalProperties/
-$(workDir)/thermophysicalFunctions/thermophysicalFunction/thermophysicalFunction.C
-
-NSRDSfunctions = $(workDir)/thermophysicalFunctions/NSRDSfunctions
-$(NSRDSfunctions)/NSRDSfunc0/NSRDSfunc0.C
-$(NSRDSfunctions)/NSRDSfunc1/NSRDSfunc1.C
-$(NSRDSfunctions)/NSRDSfunc2/NSRDSfunc2.C
-$(NSRDSfunctions)/NSRDSfunc3/NSRDSfunc3.C
-$(NSRDSfunctions)/NSRDSfunc4/NSRDSfunc4.C
-$(NSRDSfunctions)/NSRDSfunc5/NSRDSfunc5.C
-$(NSRDSfunctions)/NSRDSfunc6/NSRDSfunc6.C
-$(NSRDSfunctions)/NSRDSfunc7/NSRDSfunc7.C
-$(NSRDSfunctions)/NSRDSfunc14/NSRDSfunc14.C
-
-APIfunctions           = $(workDir)/thermophysicalFunctions/APIfunctions
-$(APIfunctions)/APIdiffCoefFunc/APIdiffCoefFunc.C
 
 $(workDir)/thermophysicalProperties/thermophysicalProperties.C
 
@@ -21,6 +6,8 @@ $(workDir)/thermophysicalProperties/thermophysicalProperties.C
 $(workDir)/liquidProperties/liquidProperties/liquidProperties.C
 liquidProperties/liquidMixtureProperties/liquidMixtureProperties.C
 
+
+$(workDir)/liquidProperties/liquid/liquid.C
 $(workDir)/liquidProperties/H2O/H2O.C
 $(workDir)/liquidProperties/C7H16/C7H16.C
 $(workDir)/liquidProperties/C12H26/C12H26.C
@@ -51,7 +38,7 @@ $(workDir)/liquidProperties/MB/MB.C
 $(workDir)/liquidProperties/CH4N2O/CH4N2O.C
 $(workDir)/liquidProperties/nC3H8O/nC3H8O.C
 $(workDir)/liquidProperties/iC3H8O/iC3H8O.C
-
+$(workDir)/liquidProperties/NH3/NH3.C
 
 solidProperties/solidProperties/solidProperties.C
 solidProperties/solidProperties/solidPropertiesNew.C

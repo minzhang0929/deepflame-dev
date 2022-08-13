@@ -35,135 +35,11 @@ Foam::CanteraMixture::CanteraMixture
     const word& phaseName
 )
 :
-    CanteraTorchProperties_
-    (
-        IOobject
-        (
-            "CanteraTorchProperties",
-            mesh.time().constant(),
-            mesh,
-            IOobject::MUST_READ_IF_MODIFIED,
-            IOobject::NO_WRITE
-        )
-    ),
-    CanteraMechanismFile_(CanteraTorchProperties_.lookup("CanteraMechanismFile")),
-    CanteraSolution_(Cantera::newSolution(CanteraMechanismFile_, "")),
-    CanteraGas_(CanteraSolution_->thermo()),
-    transportModelName_(CanteraTorchProperties_.lookup("transportModel")),
-    CanteraTransport_(newTransportMgr(transportModelName_, CanteraGas_.get())),
-    Y_(nSpecies()),
+    CanteraSpecies(thermoDict, mesh, phaseName),
     Tref_(mesh.objectRegistry::lookupObject<volScalarField>("T")),
     pref_(mesh.objectRegistry::lookupObject<volScalarField>("p")),
-    yTemp_(nSpecies()),
-    HaTemp_(nSpecies()),
-    CpTemp_(nSpecies()),
-    muTemp_(nSpecies())
+    yTemp_(nSpecies())
 {
-    forAll(Y_, i)
-    {
-        species_.append(CanteraGas_->speciesName(i));
-    }
-
-    tmp<volScalarField> tYdefault;
-
-    forAll(Y_, i)
-    {
-        IOobject header
-        (
-            species_[i],
-            mesh.time().timeName(),
-            mesh,
-            IOobject::NO_READ
-        );
-
-        // check if field exists and can be read
-        if (header.typeHeaderOk<volScalarField>(true))
-        {
-            Y_.set
-            (
-                i,
-                new volScalarField
-                (
-                    IOobject
-                    (
-                        species_[i],
-                        mesh.time().timeName(),
-                        mesh,
-                        IOobject::MUST_READ,
-                        IOobject::AUTO_WRITE
-                    ),
-                    mesh
-                )
-            );
-        }
-        else
-        {
-            // Read Ydefault if not already read
-            if (!tYdefault.valid())
-            {
-                word YdefaultName("Ydefault");
-
-                IOobject timeIO
-                (
-                    YdefaultName,
-                    mesh.time().timeName(),
-                    mesh,
-                    IOobject::MUST_READ,
-                    IOobject::NO_WRITE
-                );
-
-                IOobject constantIO
-                (
-                    YdefaultName,
-                    mesh.time().constant(),
-                    mesh,
-                    IOobject::MUST_READ,
-                    IOobject::NO_WRITE
-                );
-
-                IOobject time0IO
-                (
-                    YdefaultName,
-                    Time::timeName(0),
-                    mesh,
-                    IOobject::MUST_READ,
-                    IOobject::NO_WRITE
-                );
-
-                if (timeIO.typeHeaderOk<volScalarField>(true))
-                {
-                    tYdefault = new volScalarField(timeIO, mesh);
-                }
-                else if (constantIO.typeHeaderOk<volScalarField>(true))
-                {
-                    tYdefault = new volScalarField(constantIO, mesh);
-                }
-                else
-                {
-                    tYdefault = new volScalarField(time0IO, mesh);
-                }
-            }
-
-            Y_.set
-            (
-                i,
-                new volScalarField
-                (
-                    IOobject
-                    (
-                        species_[i],
-                        mesh.time().timeName(),
-                        mesh,
-                        IOobject::NO_READ,
-                        IOobject::AUTO_WRITE
-                    ),
-                    tYdefault()
-                )
-            );
-        }
-    }
-
-
 }
 
 
@@ -171,11 +47,10 @@ Foam::CanteraMixture::CanteraMixture
 
 void Foam::CanteraMixture::read(const dictionary& thermoDict)
 {
-    //mixture_ = ThermoType(thermoDict.subDict("mixture"));
 }
 
 
-const Foam::CanteraMixture& Foam::CanteraMixture::cellMixture(const label celli) const
+const Foam::CanteraMixture& Foam::CanteraMixture::cellThermoMixture(const label celli) const
 {
     forAll(Y_, i)
     {
@@ -187,7 +62,7 @@ const Foam::CanteraMixture& Foam::CanteraMixture::cellMixture(const label celli)
 }
 
 
-const Foam::CanteraMixture& Foam::CanteraMixture::patchFaceMixture
+const Foam::CanteraMixture& Foam::CanteraMixture::patchFaceThermoMixture
 (
     const label patchi,
     const label facei
@@ -214,7 +89,7 @@ Foam::scalar Foam::CanteraMixture::THE
     return CanteraGas_->temperature();
 }
 
-Foam::scalar Foam::CanteraMixture::Hc() const
+Foam::scalar Foam::CanteraMixture::Hf() const
 {
     scalar chemicalEnthalpy = 0;
     forAll(yTemp_, i)
