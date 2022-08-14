@@ -35,27 +35,30 @@ Description
 #include "hePsiThermo.H"
 
 #include "fvCFD.H"
-#include "dynamicFvMesh.H"
+
 #include "psiThermo.H"
-#include "turbulentFluidThermoModel.H"
+#include "compressibleMomentumTransportModels.H"
+#include "pimpleControl.H"
 #include "fixedRhoFvPatchScalarField.H"
 #include "directionInterpolate.H"
 #include "localEulerDdtScheme.H"
 #include "fvcSmooth.H"
 #include "PstreamGlobals.H"
+#include "fvModels.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 int main(int argc, char *argv[])
 {
-    #define NO_CONTROL
+    //#define NO_CONTROL
     #include "postProcess.H"
 
     #include "setRootCaseLists.H"
     #include "createTime.H"
-    #include "createDynamicFvMesh.H"
+    #include "createMesh.H"
+    #include "createDyMControls.H"
     #include "createFields.H"
-    #include "createTimeControls.H"
+    //#include "createTimeControls.H"
 
     double time_monitor_flow;
     double time_monitor_chem;
@@ -80,13 +83,19 @@ int main(int argc, char *argv[])
     {
         #include "readTimeControls.H"
 
+        fvModels.preUpdateMesh();
+
         if (!LTS)
         {
             #include "setDeltaT.H"
+
+            // Update the mesh for topology change, mesh to mesh mapping
+            mesh.update();
+
             runTime++;
 
-            // Do any mesh changes
-            mesh.update();
+            // Move the mesh
+            mesh.move();
         }
 
         // --- Directed interpolation of primitive fields onto faces
@@ -199,11 +208,16 @@ int main(int argc, char *argv[])
             phiEp += mesh.phi()*(a_pos*p_pos + a_neg*p_neg);
         }
 
-        volScalarField muEff("muEff", turbulence->muEff());
+        volScalarField muEff("muEff", turbulence->nuEff()*rho);
         volTensorField tauMC("tauMC", muEff*dev2(Foam::T(fvc::grad(U))));
 
         // --- Solve density
         #include "rhoEqn.H"
+
+        if (pimple.models())
+        {
+            fvModels.correct();
+        }
 
         start = std::clock();
         // --- Solve momentum

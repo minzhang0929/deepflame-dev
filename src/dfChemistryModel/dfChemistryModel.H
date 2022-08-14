@@ -54,6 +54,8 @@ SourceFiles
 #include "loadBalancing/LoadBalancer.H"
 #include "OFstream.H"
 #include "IOmanip.H"
+#include "OSspecific.H"
+
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
@@ -100,7 +102,9 @@ public IOdictionary
     // mass change rate, [kg/m^3/s]
     PtrList<volScalarField::Internal> RR_;
     hashedWordList species_;
-    volScalarField& alpha_;
+    //volScalarField& alpha_;
+    volScalarField& kappa_;
+    //volScalarField& Cp_;
     volScalarField& T_;
     const volScalarField& p_;
     const volScalarField& rho_;

@@ -48,6 +48,7 @@ SourceFiles
 #include "fvPatchField.H"
 #include "hashedWordList.H"
 #include "physicoChemicalConstants.H"
+#include "CanteraSpecies.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -58,236 +59,196 @@ namespace Foam
                          Class CanteraMixture Declaration
 \*---------------------------------------------------------------------------*/
 
-class CanteraMixture
+class CanteraMixture : public CanteraSpecies
 {
-    // Private Data
-
-        IOdictionary CanteraTorchProperties_;
-        const word CanteraMechanismFile_;
-        std::shared_ptr<Cantera::Solution> CanteraSolution_;
-        std::shared_ptr<Cantera::ThermoPhase> CanteraGas_;
-        word transportModelName_;
-        std::shared_ptr<Cantera::Transport> CanteraTransport_;
-        hashedWordList species_;
-        PtrList<volScalarField> Y_;
-        const volScalarField& Tref_;
-        const volScalarField& pref_;
-        mutable scalarList yTemp_;
+    const volScalarField& Tref_;
+    const volScalarField& pref_;
+    mutable scalarList yTemp_;
 
 
-        //- Construct as copy (not implemented)
-        CanteraMixture(const CanteraMixture&);
+    //- Construct as copy (not implemented)
+    CanteraMixture(const CanteraMixture&);
 
 
 public:
 
     typedef CanteraMixture basicMixtureType;
     typedef CanteraMixture thermoType;
+    typedef CanteraMixture thermoMixtureType;
+    typedef CanteraMixture transportMixtureType;
     static const bool incompressible = false;
     static const bool isochoric = false;
 
-    // Constructors
 
-        //- Construct from dictionary, mesh and phase name
-        CanteraMixture(const dictionary&, const fvMesh&, const word&);
-
-
-    // Member Functions
-
-        //- Return the instantiated type name
-        static word typeName()
-        {
-            return "CanteraMixture";
-        }
-
-        const CanteraMixture& cellMixture(const label celli) const;
-
-        const CanteraMixture& patchFaceMixture(const label patchi, const label facei) const;
-
-        scalar THE
-        (
-            const scalar& h,
-            const scalar& p,
-            const scalar& T
-        ) const;
-
-        scalar psi
-        (
-            const scalar& p,
-            const scalar& T
-        ) const
-        {
-            return CanteraGas_->meanMolecularWeight()/CanteraGas_->RT();
-        }
-
-        scalar mu
-        (
-            const scalar& p,
-            const scalar& T
-        ) const
-        {
-            return CanteraTransport_->viscosity();
-        }
-
-        scalar alphah
-        (
-            const scalar& p,
-            const scalar& T
-        ) const
-        {
-            return CanteraTransport_->thermalConductivity()/(CanteraGas_->cp_mass());
-        }
-
-        scalar HE
-        (
-            const scalar& p,
-            const scalar& T
-        ) const
-        {
-            return CanteraGas_->enthalpy_mass(); // J/kg
-        }
-
-        scalar Hc() const; // J/kg
-
-        scalar Cp
-        (
-            const scalar& p,
-            const scalar& T
-        ) const
-        {
-            return CanteraGas_->cp_mass(); // J/kg/K
-        }
-
-        scalar Cv
-        (
-            const scalar& p,
-            const scalar& T
-        ) const
-        {
-            return CanteraGas_->cv_mass(); // J/kg/K
-        }
-
-        scalar gamma
-        (
-            const scalar& p,
-            const scalar& T
-        ) const
-        {
-            return Cp(p, T)/Cv(p, T);
-        }
-
-        scalar Cpv
-        (
-            const scalar& p,
-            const scalar& T
-        ) const
-        {
-            return Cp(p, T);
-        }
-
-        scalar CpByCpv
-        (
-            const scalar& p,
-            const scalar& T
-        ) const
-        {
-            return 1;
-        }
-
-        scalar W() const
-        {
-            return CanteraGas_->meanMolecularWeight();
-        }
-
-        static inline word heName() {return "ha";}
-
-        PtrList<volScalarField>& Y() {return Y_;}
-        const PtrList<volScalarField>& Y() const {return Y_;}
-
-        volScalarField& Y(const label i) {return Y_[i];}
-        const volScalarField& Y(const label i) const {return Y_[i];}
-
-        volScalarField& Y(const word& specieName) {return Y_[species_[specieName]];}
-        const volScalarField& Y(const word& specieName) const {return Y_[species_[specieName]];}
-
-        const hashedWordList& species() const {return species_;}
-        size_t nSpecies() {return CanteraGas_->nSpecies();}
-
-        std::shared_ptr<Cantera::ThermoPhase> CanteraGas() {return CanteraGas_;}
-
-        std::shared_ptr<Cantera::Solution> CanteraSolution() {return CanteraSolution_;}
-
-        std::shared_ptr<Cantera::Transport> CanteraTransport() {return CanteraTransport_;}
-
-        const word& transportModelName() {return transportModelName_;}
+    //- Construct from dictionary, mesh and phase name
+    CanteraMixture(const dictionary&, const fvMesh&, const word&);
 
 
-private:
-        scalarList HaTemp_;
-        scalarList CpTemp_;
-        scalarList muTemp_;
-public:
 
-        void calcCp(const scalar T, const scalar p)
-        {
-            const scalar RR = constant::physicoChemical::R.value()*1e3; // J/(kmol·k)
+    //- Return the instantiated type name
+    static word typeName()
+    {
+        return "CanteraMixture";
+    }
 
-            CanteraGas_->setState_TP(T, p);
+    const CanteraMixture& cellThermoMixture(const label celli) const;
 
-            scalarList Cp_R(nSpecies());
-            CanteraGas_->getCp_R(Cp_R.begin());
-            CpTemp_ = Cp_R*RR;
-        }
+    const CanteraMixture& patchFaceThermoMixture(const label patchi, const label facei) const;
 
-        void calcMu(const scalar T, const scalar p)
-        {
-            CanteraGas_->setState_TP(T, p);
+    const transportMixtureType& cellTransportMixture
+    (
+        const label celli
+    ) const
+    {
+        return cellThermoMixture(celli);
+    }
 
-            CanteraTransport_->getSpeciesViscosities(muTemp_.begin());
-        }
+    const transportMixtureType& patchFaceTransportMixture
+    (
+        const label patchi,
+        const label facei
+    ) const
+    {
+        return patchFaceThermoMixture(patchi, facei);
+    }
 
-        void calcH(const scalar T, const scalar p)
-        {
-            const scalar RT = constant::physicoChemical::R.value()*1e3*T; // J/kmol/K
+    const transportMixtureType& cellTransportMixture
+    (
+        const label,
+        const thermoMixtureType& thermoMixture
+    ) const
+    {
+        return thermoMixture;
+    }
 
-            CanteraGas_->setState_TP(T, p);
+    const transportMixtureType& patchFaceTransportMixture
+    (
+        const label,
+        const label,
+        const thermoMixtureType& thermoMixture
+    ) const
+    {
+        return thermoMixture;
+    }
 
-            scalarList Ha_RT(nSpecies());
-            CanteraGas_->getEnthalpy_RT(Ha_RT.begin());
-            HaTemp_ = Ha_RT*RT;
-        }
+    scalar THE
+    (
+        const scalar& h,
+        const scalar& p,
+        const scalar& T
+    ) const;
 
-        scalar Cp(label i, scalar p, scalar T) const
-        {
-            return CpTemp_[i]/CanteraGas_->molecularWeight(i);
-        }
+    scalar psi
+    (
+        const scalar& p,
+        const scalar& T
+    ) const
+    {
+        return CanteraGas_->meanMolecularWeight()/CanteraGas_->RT();
+    }
 
-        scalar mu(label i, scalar p, scalar T) const
-        {
-            return muTemp_[i];
-        }
+    scalar mu
+    (
+        const scalar& p,
+        const scalar& T
+    ) const
+    {
+        return CanteraTransport_->viscosity();
+    }
 
-        scalar Ha(label i, scalar p, scalar T) const
-        {
-            return HaTemp_[i]/CanteraGas_->molecularWeight(i);
-        }
+    scalar kappa
+    (
+        const scalar& p,
+        const scalar& T
+    ) const
+    {
+        return CanteraTransport_->thermalConductivity(); // W/m/K
+    }
 
-        scalar Hc(label i) const {return CanteraGas_->Hf298SS(i)/CanteraGas_->molecularWeight(i);} // J/kg
+    scalar HE
+    (
+        const scalar& p,
+        const scalar& T
+    ) const
+    {
+        return CanteraGas_->enthalpy_mass(); // J/kg
+    }
 
-        scalar Hs(label i, scalar p, scalar T) const {return Ha(i, p, T) - Hc(i);} // J/kg
+    scalar Ha
+    (
+        const scalar& p,
+        const scalar& T
+    ) const
+    {
+        return CanteraGas_->enthalpy_mass(); // J/kg
+    }
 
-        scalar kappa(label i, scalar p, scalar T) const
-        {
-            // should be kappa of single species
-            // but now lack of access function in Cantera
-            return CanteraTransport_->thermalConductivity();
-        } // W/m/K
+    scalar Hs
+    (
+        const scalar& p,
+        const scalar& T
+    ) const
+    {
+        return CanteraGas_->enthalpy_mass() - Hf(); // J/kg
+    }
 
-        scalar Wi(label i) const {return CanteraGas_->molecularWeight(i);} // kg/kmol
+    scalar Hf() const; // J/kg
 
+    scalar Cp
+    (
+        const scalar& p,
+        const scalar& T
+    ) const
+    {
+        return CanteraGas_->cp_mass(); // J/kg/K
+    }
 
-        //- Read dictionary
-        void read(const dictionary&);
+    scalar Cv
+    (
+        const scalar& p,
+        const scalar& T
+    ) const
+    {
+        return CanteraGas_->cv_mass(); // J/kg/K
+    }
+
+    scalar gamma
+    (
+        const scalar& p,
+        const scalar& T
+    ) const
+    {
+        return Cp(p, T)/Cv(p, T);
+    }
+
+    scalar Cpv
+    (
+        const scalar& p,
+        const scalar& T
+    ) const
+    {
+        return Cp(p, T);
+    }
+
+    scalar CpByCpv
+    (
+        const scalar& p,
+        const scalar& T
+    ) const
+    {
+        return 1;
+    }
+
+    scalar W() const
+    {
+        return CanteraGas_->meanMolecularWeight();
+    }
+
+    static inline word heName() {return "ha";}
+    static inline bool enthalpy() {return true;}
+
+    //- Read dictionary
+    void read(const dictionary&);
 };
 
 

@@ -99,7 +99,7 @@ else
     }
 }
 
-bool limitedp = pressureControl.limit(p);
+bool limitedp = pressureReference.limit(p);
 
 // Thermodynamic density update
 thermo.correctRho(psi*p - psip0);

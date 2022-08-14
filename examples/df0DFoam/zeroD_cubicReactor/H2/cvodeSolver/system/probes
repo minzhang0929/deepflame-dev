@@ -10,12 +10,12 @@ Description
 
 \*---------------------------------------------------------------------------*/
 
-#includeEtc "caseDicts/postProcessing/probes/probes.cfg"
-
 fields (T);
-probeLocations
+points
 (
     (0.0025 0.0025 0.0025)
 );
+
+#includeEtc "caseDicts/postProcessing/probes/probes.cfg"
 
 // ************************************************************************* //

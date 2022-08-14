@@ -2,7 +2,7 @@
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     | Website:  https://openfoam.org
-    \\  /    A nd           | Copyright (C) 2011-2019 OpenFOAM Foundation
+    \\  /    A nd           | Copyright (C) 2011-2021 OpenFOAM Foundation
      \\/     M anipulation  |
 -------------------------------------------------------------------------------
 License
@@ -45,8 +45,12 @@ SourceFiles
 namespace Foam
 {
 
+// Forward declaration of friend functions and operators
+class solidProperties;
+Ostream& operator<<(Ostream&, const solidProperties&);
+
 /*---------------------------------------------------------------------------*\
-                     Class solidProperties Declaration
+                       Class solidProperties Declaration
 \*---------------------------------------------------------------------------*/
 
 class solidProperties
@@ -142,14 +146,23 @@ public:
             //- Specific heat capacity [J/kg/K]
             inline scalar Cp() const;
 
-            //- Thermal conductivity [W/m/K]
-            inline scalar kappa() const;
-
             //- Heat of formation [J/kg]
             inline scalar Hf() const;
 
-            //- Sensible enthalpy - reference to Tstd [J/kg]
+            //- Sensible enthalpy [J/kg]
             inline scalar Hs(const scalar T) const;
+
+            //- Absolute enthalpy [J/kg]
+            inline scalar Ha(scalar T) const;
+
+            //- Sensible internal energy [J/kg]
+            inline scalar Es(const scalar T) const;
+
+            //- Absolute internal energy [J/kg]
+            inline scalar Ea(scalar T) const;
+
+            //- Thermal conductivity [W/m/K]
+            inline scalar kappa() const;
 
             //- Emissivity []
             inline scalar emissivity() const;
@@ -161,14 +174,11 @@ public:
         void readIfPresent(const dictionary& dict);
 
         //- Write the solidProperties properties
-        virtual void writeData(Ostream& os) const;
+        virtual void write(Ostream& os) const;
 
         //- Ostream Operator
         friend Ostream& operator<<(Ostream& os, const solidProperties& s);
 };
-
-
-Ostream& operator<<(Ostream&, const solidProperties&);
 
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

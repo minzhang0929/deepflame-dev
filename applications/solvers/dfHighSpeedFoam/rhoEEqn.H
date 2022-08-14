@@ -2,7 +2,7 @@ surfaceScalarField sigmaDotU
 (
     "sigmaDotU",
     (
-        fvc::interpolate(turbulence->muEff())*mesh.magSf()*fvc::snGrad(U)
+        fvc::interpolate(turbulence->nuEff()*rho)*mesh.magSf()*fvc::snGrad(U)
       + (mesh.Sf() & fvc::interpolate(tauMC))
     )
     & (a_pos*U_pos + a_neg*U_neg)
@@ -25,11 +25,15 @@ rhoE.boundaryFieldRef() == rho.boundaryField()*(e.boundaryField() + 0.5*magSqr(U
 
 if (!inviscid)
 {
+    // correct alphat
+    alphat = rho*turbulence->nut()/Prt;
+    alphat.correctBoundaryConditions();
+
     fvScalarMatrix eEqn
     (
            fvm::ddt(rho, e) - fvc::ddt(rho, e)
         // alpha in deepflame is considered to calculate h by default (kappa/Cp), so multiply gamma to correct alpha
-         - fvm::laplacian(turbulence->alphaEff()*thermo.gamma(), e)
+         - fvc::laplacian(thermo.alphaEff(alphat)*thermo.gamma(), e)
          + diffAlphaD
       ==
            fvc::div(hDiffCorrFlux)

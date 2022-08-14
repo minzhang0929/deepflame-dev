@@ -1,0 +1,4 @@
+alphatWallFunctionFvPatchScalarField.C
+
+
+LIB = $(FOAM_USER_LIBBIN)/libdfAlphatWallFunction

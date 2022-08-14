@@ -9,7 +9,7 @@ tmp<fv::convectionScheme<scalar>> mvConvection
         mesh,
         fields,
         phi,
-        mesh.divScheme("div(phi,Yi_h)")
+        mesh.schemes().div("div(phi,Yi_h)")
     )
 );
 
@@ -35,11 +35,11 @@ const surfaceScalarField phiUc = linearInterpolate(sumYDiffError) & mesh.Sf();
     {
         volScalarField& Yi = Y[i];
         hDiffCorrFlux += chemistry.hai(i)*(chemistry.rhoD(i)*fvc::grad(Yi) - Yi*sumYDiffError);
-        diffAlphaD += fvc::laplacian(thermo.alpha()*chemistry.hai(i), Yi);
+        diffAlphaD += fvc::laplacian(thermo.alphahe()*chemistry.hai(i), Yi);
 
         if (i != inertIndex)
         {
-            tmp<volScalarField> DEff = chemistry.rhoD(i) + turbulence->mut()/Sct;
+            tmp<volScalarField> DEff = chemistry.rhoD(i) + rho*turbulence->nut()/Sct;
             fvScalarMatrix YiEqn
             (
                 fvm::ddt(rho, Yi)
@@ -48,6 +48,7 @@ const surfaceScalarField phiUc = linearInterpolate(sumYDiffError) & mesh.Sf();
               + mvConvection->fvmDiv(phiUc, Yi)
              ==
                 chemistry.RR(i)
+              + fvModels.source(rho, Yi)
             );
 
             YiEqn.relax();

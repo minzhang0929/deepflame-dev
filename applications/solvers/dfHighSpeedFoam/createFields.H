@@ -2,8 +2,8 @@
 
 Info<< "Reading thermophysical properties\n" << endl;
 
-psiThermo* pThermo = new hePsiThermo<psiThermo, CanteraMixture>(mesh, word::null);
-psiThermo& thermo = *pThermo;
+fluidThermo* pThermo = new hePsiThermo<psiThermo::composite, CanteraMixture>(mesh, word::null);
+fluidThermo& thermo = *pThermo;
 
 //move from creatFieldRefs.H to createFields.H
 //p needed to be created before e
@@ -112,9 +112,9 @@ surfaceScalarField neg
 surfaceScalarField phi("phi", fvc::flux(rhoU));
 
 Info<< "Creating turbulence model\n" << endl;
-autoPtr<compressible::turbulenceModel> turbulence
+autoPtr<compressible::momentumTransportModel> turbulence
 (
-    compressible::turbulenceModel::New
+    compressible::momentumTransportModel::New
     (
         rho,
         U,
@@ -125,7 +125,7 @@ autoPtr<compressible::turbulenceModel> turbulence
 
 multivariateSurfaceInterpolationScheme<scalar>::fieldTable fields;
 
-dfChemistryModel<basicThermo> chemistry(thermo);
+dfChemistryModel<fluidThermo> chemistry(thermo);
 PtrList<volScalarField>& Y = chemistry.Y();
 const word inertSpecie(chemistry.lookup("inertSpecie"));
 const label inertIndex(chemistry.species()[inertSpecie]);
@@ -139,6 +139,28 @@ forAll(Y, i)
 }
 fields.add(thermo.he());
 
+
+volScalarField alphat
+(
+    IOobject
+    (
+        "alphat",
+        runTime.timeName(),
+        mesh,
+        IOobject::READ_IF_PRESENT,
+        IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionedScalar(dimDynamicViscosity, 0)
+);
+
+const word turbType = turbulence->lookup("simulationType");
+if(turbType!="laminar")
+{
+    alphat.readOpt() = IOobject::MUST_READ;
+}
+
+const scalar Prt = chemistry.lookupOrDefault("Prt", 1.);
 const scalar Sct = chemistry.lookupOrDefault("Sct", 1.);
 volScalarField diffAlphaD
 (
@@ -179,3 +201,5 @@ volVectorField sumYDiffError
     mesh,
     dimensionedVector("sumYDiffError", dimDynamicViscosity/dimLength, Zero)
 );
+
+#include "createFvModels.H"

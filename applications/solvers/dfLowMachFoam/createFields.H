@@ -2,7 +2,7 @@
 
 Info<< "Reading thermophysical properties\n" << endl;
 
-fluidThermo* pThermo = new hePsiThermo<psiThermo, CanteraMixture>(mesh, word::null);
+fluidThermo* pThermo = new hePsiThermo<psiThermo::composite, CanteraMixture>(mesh, word::null);
 fluidThermo& thermo = *pThermo;
 thermo.validate(args.executable(), "ha");
 
@@ -22,7 +22,7 @@ volScalarField rho
     thermo.rho()
 );
 
-dfChemistryModel<basicThermo> chemistry(thermo);
+dfChemistryModel<fluidThermo> chemistry(thermo);
 PtrList<volScalarField>& Y = chemistry.Y();
 const word inertSpecie(chemistry.lookup("inertSpecie"));
 const label inertIndex(chemistry.species()[inertSpecie]);
@@ -46,14 +46,14 @@ volVectorField U
 
 #include "compressibleCreatePhi.H"
 
-pressureControl pressureControl(p, rho, pimple.dict(), false);
+pressureReference pressureReference(p, rho, pimple.dict(), false);
 
-mesh.setFluxRequired(p.name());
+mesh.schemes().setFluxRequired(p.name());
 
 Info<< "Creating turbulence model\n" << endl;
-autoPtr<compressible::turbulenceModel> turbulence
+autoPtr<compressible::momentumTransportModel> turbulence
 (
-    compressible::turbulenceModel::New
+    compressible::momentumTransportModel::New
     (
         rho,
         U,
@@ -85,6 +85,27 @@ forAll(Y, i)
 }
 fields.add(thermo.he());
 
+volScalarField alphat
+(
+    IOobject
+    (
+        "alphat",
+        runTime.timeName(),
+        mesh,
+        IOobject::READ_IF_PRESENT,
+        IOobject::NO_WRITE
+    ),
+    mesh,
+    dimensionedScalar(dimDynamicViscosity, 0)
+);
+
+const word turbType = turbulence->lookup("simulationType");
+if(turbType!="laminar")
+{
+    alphat.readOpt() = IOobject::MUST_READ;
+}
+
+const scalar Prt = chemistry.lookupOrDefault("Prt", 1.);
 const scalar Sct = chemistry.lookupOrDefault("Sct", 1.);
 volScalarField diffAlphaD
 (
@@ -125,3 +146,8 @@ volVectorField sumYDiffError
     mesh,
     dimensionedVector("sumYDiffError", dimDynamicViscosity/dimLength, Zero)
 );
+
+dimensionedScalar initialMass = fvc::domainIntegrate(rho);
+
+#include "createMRF.H"
+#include "createFvModels.H"
