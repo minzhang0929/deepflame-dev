@@ -50,7 +50,7 @@ namespace Foam
     defineTemplateTypeNameAndDebugWithName                                     \
     (                                                                          \
         CThermo##Mixture##ThermoPhys,                                          \
-        (#CThermo"<" + Mixture::typeName() + "111>").c_str(),                  \
+        (#CThermo"<" + Mixture::typeName() + ">").c_str(),                     \
         0                                                                      \
     )
 
