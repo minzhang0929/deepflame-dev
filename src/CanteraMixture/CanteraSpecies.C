@@ -37,42 +37,57 @@ private:
     scalarList muTemp_;
 
 public:
-    Impl(/*CanteraSpecies* CanteraSpeciesPtr, */const dictionary& thermoDict, const fvMesh& mesh, const word& phaseName){}
+    Impl(CanteraSpecies* CanteraSpeciesPtr, const dictionary& thermoDict, const fvMesh& mesh, const word& phaseName){}
 
     void calcCp(const scalar& p, const scalar& T)
     {
-        // const scalar RR = constant::physicoChemical::R.value()*1e3; // J/(kmol·k)
+        const scalar RR = constant::physicoChemical::R.value()*1e3; // J/(kmol·k)
 
-        // CanteraSpeciesPtr->CanteraGas_->setState_TP(T, p);
+        CanteraSpeciesPtr->CanteraGas_->setState_TP(T, p);
 
-        // scalarList Cp_R(CanteraSpeciesPtr->nSpecies());
-        // CanteraSpeciesPtr->CanteraGas_->getCp_R(Cp_R.begin());
-        // CpTemp_ = Cp_R*RR;
+        scalarList Cp_R(CanteraSpeciesPtr->nSpecies());
+        CanteraSpeciesPtr->CanteraGas_->getCp_R(Cp_R.begin());
+        CpTemp_ = Cp_R*RR;
     }
 
     void calcMu(const scalar& p, const scalar& T)
     {
-        // CanteraSpeciesPtr->CanteraGas_->setState_TP(T, p);
+        CanteraSpeciesPtr->CanteraGas_->setState_TP(T, p);
 
-        // CanteraSpeciesPtr->CanteraTransport_->getSpeciesViscosities(muTemp_.begin());
+        CanteraSpeciesPtr->CanteraTransport_->getSpeciesViscosities(muTemp_.begin());
     }
 
     void calcH(const scalar& p, const scalar& T)
     {
-        // const scalar RT = constant::physicoChemical::R.value()*1e3*T; // J/kmol/K
+        const scalar RT = constant::physicoChemical::R.value()*1e3*T; // J/kmol/K
 
-        // CanteraSpeciesPtr->CanteraGas_->setState_TP(T, p);
+        CanteraSpeciesPtr->CanteraGas_->setState_TP(T, p);
 
-        // scalarList Ha_RT(CanteraSpeciesPtr->nSpecies());
-        // CanteraSpeciesPtr->CanteraGas_->getEnthalpy_RT(Ha_RT.begin());
-        // HaTemp_ = Ha_RT*RT;
+        scalarList Ha_RT(CanteraSpeciesPtr->nSpecies());
+        CanteraSpeciesPtr->CanteraGas_->getEnthalpy_RT(Ha_RT.begin());
+        HaTemp_ = Ha_RT*RT;
+    }
+
+    scalar Cp(label i, scalar p, scalar T) const
+    {
+        return CpTemp_[i]/CanteraSpeciesPtr->CanteraGas_->molecularWeight(i);
+    }
+
+    scalar mu(label i, scalar p, scalar T) const
+    {
+        return muTemp_[i];
+    }
+
+    scalar Ha(label i, scalar p, scalar T) const
+    {
+        return HaTemp_[i]/CanteraSpeciesPtr->CanteraGas_->molecularWeight(i);
     }
 };
 
 
 Foam::CanteraSpecies::CanteraSpecies(const dictionary& thermoDict, const fvMesh& mesh, const word& phaseName)
 :
-    pimpl_(std::make_unique<Impl>(/*this, */thermoDict, mesh, phaseName)),
+    pimpl_(std::make_unique<Impl>(this, thermoDict, mesh, phaseName)),
     CanteraTorchProperties_
     (
         IOobject
@@ -89,15 +104,11 @@ Foam::CanteraSpecies::CanteraSpecies(const dictionary& thermoDict, const fvMesh&
     CanteraGas_(CanteraSolution_->thermo()),
     transportModelName_(CanteraTorchProperties_.lookup("transportModel")),
     CanteraTransport_(newTransportMgr(transportModelName_, CanteraGas_.get())),
-    Y_(nSpecies()),
-    HaTemp_(nSpecies()),
-    CpTemp_(nSpecies()),
-    muTemp_(nSpecies())
+    Y_(nSpecies())
 {
-   forAll(Y_, i)
+    forAll(Y_, i)
     {
         species_.append(CanteraGas_->speciesName(i));
-        Info<<"species "<<CanteraGas_->speciesName(i)<<" added!"<<endl;
     }
 
     tmp<volScalarField> tYdefault;
@@ -201,27 +212,43 @@ Foam::CanteraSpecies::CanteraSpecies(const dictionary& thermoDict, const fvMesh&
 }
 
 
-
-
 Foam::CanteraSpecies::~CanteraSpecies(){}
 
 
+void Foam::CanteraSpecies::calcCp(const scalar& p, const scalar& T) const
+{
+    pimpl_->calcCp(p, T);
+}
 
-    void Foam::CanteraSpecies::calcCp(const scalar& p, const scalar& T) const
-    {
-        pimpl_->calcCp(p, T);
-    }
 
-    void Foam::CanteraSpecies::calcMu(const scalar& p, const scalar& T) const
-    {
-        pimpl_->calcMu(p, T);
-    }
+void Foam::CanteraSpecies::calcMu(const scalar& p, const scalar& T) const
+{
+    pimpl_->calcMu(p, T);
+}
 
-    void Foam::CanteraSpecies::calcH(const scalar& p, const scalar& T) const
-    {
-        pimpl_->calcH(p, T);
-    }
 
+void Foam::CanteraSpecies::calcH(const scalar& p, const scalar& T) const
+{
+    pimpl_->calcH(p, T);
+}
+
+
+Foam::scalar Foam::CanteraSpecies::Cp(label i, scalar p, scalar T) const
+{
+    return pimpl_->Cp(i, p, T);
+}
+
+
+Foam::scalar Foam::CanteraSpecies::mu(label i, scalar p, scalar T) const
+{
+    return pimpl_->mu(i, p, T);
+}
+
+
+Foam::scalar Foam::CanteraSpecies::Ha(label i, scalar p, scalar T) const
+{
+    return pimpl_->Ha(i, p, T);
+}
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 

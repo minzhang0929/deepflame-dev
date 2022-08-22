@@ -72,18 +72,13 @@ protected:
     hashedWordList species_;
     PtrList<volScalarField> Y_;
 
-
-private:
-        scalarList HaTemp_;
-        scalarList CpTemp_;
-        scalarList muTemp_;
-
 public:
     static word typeName()
     {
         return "CanteraSpecies";
     }
-~CanteraSpecies();
+
+    ~CanteraSpecies();
 
     //- Construct from dictionary, mesh and phase name
     CanteraSpecies(const dictionary&, const fvMesh&, const word&);
@@ -95,20 +90,11 @@ public:
     void calcH(const scalar& p, const scalar& T) const;
 
 
-    scalar Cp(label i, scalar p, scalar T) const
-    {
-        return CpTemp_[i]/CanteraGas_->molecularWeight(i);
-    }
+    scalar Cp(label i, scalar p, scalar T) const;
 
-    scalar mu(label i, scalar p, scalar T) const
-    {
-        return muTemp_[i];
-    }
+    scalar mu(label i, scalar p, scalar T) const;
 
-    scalar Ha(label i, scalar p, scalar T) const
-    {
-        return HaTemp_[i]/CanteraGas_->molecularWeight(i);
-    }
+    scalar Ha(label i, scalar p, scalar T) const;
 
     scalar Hf(label i) const
     {
@@ -134,8 +120,8 @@ public:
     } // W/m/K
 
     const hashedWordList& species() const {return species_;}
-    size_t nSpecies() {return CanteraGas_->nSpecies();}
 
+    size_t nSpecies() {return CanteraGas_->nSpecies();}
 
     std::shared_ptr<Cantera::ThermoPhase> CanteraGas() {return CanteraGas_;}
 
@@ -154,10 +140,6 @@ public:
 
     volScalarField& Y(const word& specieName) {return Y_[species_[specieName]];}
     const volScalarField& Y(const word& specieName) const {return Y_[species_[specieName]];}
-
-
-
-
 
     bool contains(const word& specieName) const {return species_.found(specieName);}
 
