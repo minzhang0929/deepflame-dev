@@ -16,6 +16,6 @@ src/lagrangian/Allwmake $targetType $*
 wmake applications/solvers/df0DFoam
 wmake applications/solvers/dfLowMachFoam
 wmake applications/solvers/dfHighSpeedFoam
-wmake applications/solvers/dfSprayFoam
+# wmake applications/solvers/dfSprayFoam
 
 wmake applications/utilities/flameSpeed

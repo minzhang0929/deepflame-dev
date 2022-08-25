@@ -106,8 +106,12 @@ Foam::dfChemistryModel<ThermoType>::dfChemistryModel
         Xstd_ = scalarList(this->subDict("torchParameters").lookup("Xstd"));
         Ymu_ = scalarList(this->subDict("torchParameters").lookup("Ymu"));
         Ystd_ = scalarList(this->subDict("torchParameters").lookup("Ystd"));
-        Tact_ = this->subDict("torchParameters").lookupOrDefault("Tact", 700);
+        Tact_high = this->subDict("torchParameters").lookupOrDefault("Tact", 2500);
+        Tact_low = this->subDict("torchParameters").lookupOrDefault("Tact", 700);
         Qdotact_ = this->subDict("torchParameters").lookupOrDefault("Qdotact", 1e9);
+        torch::jit::script::Module torchModel_ = torch::jit::load(torchModelName_);
+        GpuInference CUDA(torchModel_);
+        CUDA_ = CUDA;
     }
 
     for(const auto& name : CanteraGas_->speciesNames())
@@ -196,8 +200,11 @@ Foam::dfChemistryModel<ThermoType>::dfChemistryModel
     {
         hc_[i] = CanteraGas_->Hf298SS(i)/CanteraGas_->molecularWeight(i);
     }
-}
 
+    // torch::jit::script::Module torchModel_ = torch::jit::load(torchModelName_);
+    // GpuInference CUDA(torchModel_);
+    // CUDA_ = CUDA;
+}
 
 // * * * * * * * * * * * * * * * * Destructor  * * * * * * * * * * * * * * * //
 
@@ -220,7 +227,7 @@ Foam::scalar Foam::dfChemistryModel<ThermoType>::solve
     scalar result = 0;
     if(torchSwitch_)
     {
-        result = torchSolve(deltaT);
+        result = torchCUDAoneCoreSolve(deltaT);
     }
     else
     {
@@ -353,83 +360,63 @@ Foam::scalar Foam::dfChemistryModel<ThermoType>::torchSolve
         return deltaTMin;
     }
 
-    Info<<"=== begin torch&ode-solve === "<<endl;
+    std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    Info << "=== begin torch&ode-solve === " << endl;
 
     // set variables
     scalarList yPre_(mixture_.nSpecies());
     scalarList yBCT_(mixture_.nSpecies());
-    scalarList u_(mixture_.nSpecies()+2); //plus T and p
+    scalarList u_(mixture_.nSpecies() + 2); // plus T and p
     Cantera::Reactor react;
     double lambda = 0.1;
 
-    // load model
-    torch::DeviceType device_type;
-    torch::DeviceIndex index = -1;
-    if (0)
-    {
-        device_type = torch::kCUDA;
-        index = 0;
-    }
-    else
-    {
-        device_type = torch::kCPU;
-        index = 0;
-    }
-    torch::Device device(device_type, index);
-    if (!isFile(torchModelName_))
-    {
-        FatalErrorInFunction
-            << torchModelName_
-            << " doesn't exist!"
-            << exit(FatalError);
-    }
-    torch::jit::script::Module torchModel_ = torch::jit::load(torchModelName_, device);
+    torch::jit::script::Module torchModel_ = torch::jit::load(torchModelName_, torch::kCPU);
 
     std::vector<label> torch_cell;
-    label torch_cellname= 0;
+    label torch_cellname = 0;
 
+    std::chrono::steady_clock::time_point start_0 = std::chrono::steady_clock::now();
     // obtain the number of DNN cells
     forAll(T_, cellI)
     {
-        if ((Qdot_[cellI] >= Qdotact_) && (T_[cellI] >= Tact_))
+        if ((T_[cellI] >= Tact_low) && (T_[cellI] <= Tact_high))
         {
             torch_cell.push_back(cellI);
         }
     }
 
-    torch::Tensor inputs(torch::zeros({torch_cell.size(),mixture_.nSpecies()+2}));
+    torch::Tensor inputs(torch::zeros({torch_cell.size(), mixture_.nSpecies() + 2}));
     forAll(T_, cellI)
     {
         scalar Ti = T_[cellI];
         scalar pi = p_[cellI];
         scalar rhoi = rho_[cellI];
 
-        if ((Qdot_[cellI] >= Qdotact_) && (Ti >= Tact_))
+        if ((T_[cellI] >= Tact_low) && (T_[cellI] <= Tact_high))
         {
             Qdot_[cellI] = 0.0;
-            // Info<<"Now is DNN "<<endl;
 
             // set inputs
             std::vector<double> inputs_;
-            inputs_.push_back((Ti - Xmu_[0])/Xstd_[0]);
-            inputs_.push_back((pi / 101325 - Xmu_[1])/Xstd_[1]);
-            for (size_t i=0; i<CanteraGas_->nSpecies(); ++i)
+            inputs_.push_back((Ti - Xmu_[0]) / Xstd_[0]);
+            inputs_.push_back((pi / 101325 - Xmu_[1]) / Xstd_[1]);
+            for (size_t i = 0; i < CanteraGas_->nSpecies(); ++i)
             {
                 yPre_[i] = Y_[i][cellI];
-                yBCT_[i] = (pow(yPre_[i],lambda) - 1) / lambda; // function BCT
+                yBCT_[i] = (pow(yPre_[i], lambda) - 1) / lambda; // function BCT
             }
-            for (size_t i=0; i<CanteraGas_->nSpecies(); ++i)
+            for (size_t i = 0; i < CanteraGas_->nSpecies(); ++i)
             {
-                inputs_.push_back((yBCT_[i] - Xmu_[i+2]) / Xstd_[i+2]);
+                inputs_.push_back((yBCT_[i] - Xmu_[i + 2]) / Xstd_[i + 2]);
             }
             inputs[torch_cellname] = torch::tensor(inputs_);
-            torch_cellname ++;
+            torch_cellname++;
             // Info << "cell_name = "<< cellI <<endl;
         }
         else
         {
             Qdot_[cellI] = 0.0;
-            for (size_t i=0; i<CanteraGas_->nSpecies(); ++i)
+            for (size_t i = 0; i < CanteraGas_->nSpecies(); ++i)
             {
                 yPre_[i] = Y_[i][cellI];
             }
@@ -445,43 +432,634 @@ Foam::scalar Foam::dfChemistryModel<ThermoType>::torchSolve
 
             CanteraGas_->getMassFractions(yTemp_.begin());
 
-            for (size_t i=0; i<CanteraGas_->nSpecies(); ++i)
+            for (size_t i = 0; i < CanteraGas_->nSpecies(); i++)
+            {
+                RR_[i][cellI] = (yTemp_[i] - yPre_[i]) * rhoi / deltaT;
+                Qdot_[cellI] -= hc_[i] * RR_[i][cellI];
+            }
+        }
+    }
+    std::chrono::steady_clock::time_point stop_0 = std::chrono::steady_clock::now();
+    std::chrono::duration<double> processingTime_0 = std::chrono::duration_cast<std::chrono::duration<double>>(stop_0 - start_0);
+    std::cout << "beforeInfTime = " << processingTime_0.count() << std::endl;
+    // DNN
+
+    std::chrono::steady_clock::time_point start_1 = std::chrono::steady_clock::now();
+    std::vector<torch::jit::IValue> INPUTS{inputs};
+    auto outputs_raw = torchModel_.forward(INPUTS);
+    auto outputs = outputs_raw.toTensor();
+
+    std::chrono::steady_clock::time_point stop_1 = std::chrono::steady_clock::now();
+    std::chrono::duration<double> processingTime_1 = std::chrono::duration_cast<std::chrono::duration<double>>(stop_1 - start_1);
+    std::cout << "InfTime = " << processingTime_1.count() << std::endl;
+
+    std::chrono::steady_clock::time_point start_2 = std::chrono::steady_clock::now();
+    for (size_t cellI = 0; cellI < torch_cell.size(); cellI++)
+    {
+        // update y
+        scalar Yt = 0;
+        for (size_t i = 0; i < CanteraGas_->nSpecies(); ++i)
+        {
+            yPre_[i] = Y_[i][torch_cell[cellI]];
+            yTemp_[i] = Y_[i][torch_cell[cellI]];
+            yBCT_[i] = (pow(yPre_[i], lambda) - 1) / lambda; // function BCT
+        }
+        for (size_t i = 0; i < (CanteraGas_->nSpecies()); ++i) //
+        {
+            u_[i + 2] = outputs[cellI][i + 2].item().to<double>() * Ystd_[i + 2] + Ymu_[i + 2];
+            yTemp_[i] = pow((yBCT_[i] + u_[i + 2] * deltaT) * lambda + 1, 1 / lambda);
+            Yt += yTemp_[i];
+        }
+        for (size_t i = 0; i < CanteraGas_->nSpecies(); ++i)
+        {
+            yTemp_[i] = yTemp_[i] / Yt;
+            RR_[i][torch_cell[cellI]] = (yTemp_[i] - Y_[i][torch_cell[cellI]]) * rho_[torch_cell[cellI]] / deltaT;
+            Qdot_[torch_cell[cellI]] -= hc_[i] * RR_[i][torch_cell[cellI]];
+        }
+    }
+    // printf("RR_ = %lf \n",RR_[0][5]);
+
+    std::chrono::steady_clock::time_point stop_2 = std::chrono::steady_clock::now();
+    std::chrono::duration<double> processingTime_2 = std::chrono::duration_cast<std::chrono::duration<double>>(stop_2 - start_2);
+    std::cout << "afterInfTime = " << processingTime_2.count() << std::endl;
+
+    Info << "=== end torch&ode-solve === " << endl;
+
+    std::chrono::steady_clock::time_point stop = std::chrono::steady_clock::now();
+    std::chrono::duration<double> processingTime = std::chrono::duration_cast<std::chrono::duration<double>>(stop - start);
+    std::cout << "allSolveTime = " << processingTime.count() << std::endl;
+
+    return deltaTMin;
+}
+
+template <class ThermoType>
+template <class DeltaTType>
+Foam::scalar Foam::dfChemistryModel<ThermoType>::torchCUDAoneCoreSolve(
+    const DeltaTType &deltaT)
+{
+    scalar deltaTMin = great;
+
+    if (!this->chemistry_)
+    {
+        return deltaTMin;
+    }
+    std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+    Info << "=== begin torchCUDAoneCore-solve === " << endl;
+
+    // set variables
+    scalarList yPre_(mixture_.nSpecies());
+    scalarList yBCT_(mixture_.nSpecies());
+    scalarList u_(mixture_.nSpecies() + 2);
+    Cantera::Reactor react;
+    double lambda = 0.1;
+
+    std::vector<size_t> torch_cell;
+    label torch_cellname = 0;
+
+    // obtain the number of DNN cells
+    std::chrono::steady_clock::time_point start_0 = std::chrono::steady_clock::now();
+    forAll(T_, cellI)
+    {
+        if (T_[cellI] >= Tact_low)
+        {
+            torch_cell.push_back(cellI);
+        }
+    }
+
+    // generate GPU inputs and solve CVODE cells
+    std::vector<double> inputs_;
+    inputs_.reserve(torch_cell.size() * (CanteraGas_->nSpecies() + 3));
+
+    forAll(T_, cellI)
+    {
+        scalar Ti = T_[cellI];
+        scalar pi = p_[cellI];
+        scalar rhoi = rho_[cellI];
+
+        if (Ti >= Tact_low)
+        {
+            Qdot_[cellI] = 0.0;
+
+            // set inputs
+            inputs_.push_back(Ti);
+            inputs_.push_back(pi);
+            for (size_t i = 0; i < CanteraGas_->nSpecies(); i++)
+            {
+                inputs_.push_back(Y_[i][cellI]);
+            }
+            inputs_.push_back(rhoi);
+        }
+        else
+        {
+            Qdot_[cellI] = 0.0;
+            for (size_t i = 0; i < CanteraGas_->nSpecies(); i++)
+            {
+                yPre_[i] = Y_[i][cellI];
+            }
+
+            CanteraGas_->setState_TPY(Ti, pi, yPre_.begin());
+            react.insert(mixture_.CanteraSolution());
+            react.setEnergy(0);
+
+            Cantera::ReactorNet sim;
+            sim.addReactor(react);
+            setNumerics(sim);
+            sim.advance(deltaT);
+
+            CanteraGas_->getMassFractions(yTemp_.begin());
+
+            for (size_t i = 0; i < CanteraGas_->nSpecies(); i++)
+            {
+                RR_[i][cellI] = (yTemp_[i] - yPre_[i]) * rhoi / deltaT;
+                Qdot_[cellI] -= hc_[i] * RR_[i][cellI];
+            }
+        }
+    }
+    auto inputs = torch::tensor(inputs_);
+    inputs = inputs.reshape({torch_cell.size(), mixture_.nSpecies() + 3});
+
+    std::chrono::steady_clock::time_point stop_0 = std::chrono::steady_clock::now();
+    std::chrono::duration<double> processingTime_0 = std::chrono::duration_cast<std::chrono::duration<double>>(stop_0 - start_0);
+    std::cout << "beforeCUDATime = " << processingTime_0.count() << std::endl;
+
+    // DNN
+
+    std::chrono::steady_clock::time_point start_3 = std::chrono::steady_clock::now();
+
+    at::Tensor outputs = CUDA_.Inference(inputs);
+
+    std::chrono::steady_clock::time_point stop_3 = std::chrono::steady_clock::now();
+    std::chrono::duration<double> processingTime_3 = std::chrono::duration_cast<std::chrono::duration<double>>(stop_3 - start_3);
+    std::cout << "CUDATime = " << processingTime_3.count() << std::endl;
+
+    outputs = outputs.to(at::kCPU);
+    std::vector<double> outputsVec(outputs.data_ptr<double>(), outputs.data_ptr<double>() + outputs.numel());
+
+    std::chrono::steady_clock::time_point start_2 = std::chrono::steady_clock::now();
+    for (size_t cellI = 0; cellI < torch_cell.size(); cellI++)
+    {
+        // update y
+        for (size_t i = 0; i < CanteraGas_->nSpecies(); i++)
+        {
+            RR_[i][torch_cell[cellI]] = outputsVec[cellI * 7 + i];
+            Qdot_[cellI] -= hc_[i] * RR_[i][cellI];
+        }
+    }
+    std::chrono::steady_clock::time_point stop_2 = std::chrono::steady_clock::now();
+    std::chrono::duration<double> processingTime_2 = std::chrono::duration_cast<std::chrono::duration<double>>(stop_2 - start_2);
+    std::cout << "afterCUDATime = " << processingTime_2.count() << std::endl;
+
+    Info << "=== end torch&ode-solve === " << endl;
+    std::chrono::steady_clock::time_point stop = std::chrono::steady_clock::now();
+    std::chrono::duration<double> processingTime = std::chrono::duration_cast<std::chrono::duration<double>>(stop - start);
+    std::cout << "allSolveTime = " << processingTime.count() << std::endl;
+
+    return deltaTMin;
+}
+
+template <class ThermoType>
+template <class DeltaTType>
+Foam::scalar Foam::dfChemistryModel<ThermoType>::torchCUDASolve(
+    const DeltaTType &deltaT)
+{
+    scalar deltaTMin = great;
+
+    if (!this->chemistry_)
+    {
+        return deltaTMin;
+    }
+
+    Info << "=== begin torch&ode-CUDAsolve === " << endl;
+
+    // set variables
+    scalarList yPre_(mixture_.nSpecies());
+    scalarList yBCT_(mixture_.nSpecies());
+    scalarList u_(mixture_.nSpecies() + 2); // plus T and p
+    Cantera::Reactor react;
+    double lambda = 0.1;
+
+    torch::jit::script::Module torchModel_ = torch::jit::load(torchModelName_);
+
+    std::vector<size_t> torch_cell;
+
+    DynamicList<GpuProblem> problemList;
+
+    // get cuda problemList
+    forAll(T_, cellI)
+    {
+        scalar Ti = T_[cellI];
+        scalar pi = p_[cellI];
+        scalar rhoi = rho_[cellI];
+
+        if ((T_[cellI] >= Tact_low) && (T_[cellI] <= Tact_high))
+        {
+
+            Qdot_[cellI] = 0.0;
+
+            // set problems
+            GpuProblem problem(CanteraGas_->nSpecies());
+            problem.cellid = cellI;
+            problem.Ti = Ti;
+            problem.pi = pi;
+            for (size_t i = 0; i < CanteraGas_->nSpecies(); i++)
+            {
+                problem.Y[i] = Y_[i][cellI];
+            }
+            problem.rhoi = rhoi;
+            problemList.append(problem);
+        }
+    }
+
+    // Allgather (set a function instead(input:problemList; output:cudaProcs))
+    label torch_size = problemList.size();
+
+    DynamicList<label> ret(Pstream::nProcs(), torch_size);
+    ret[Pstream::myProcNo()] = torch_size;
+
+    label tag = 1;
+    Pstream::gatherList(ret, tag);
+    Pstream::scatterList(ret, tag);
+
+    label cudaProcs = std::max_element(ret.begin(), ret.end()) - ret.begin();
+
+    // sending problems by mpi
+    PstreamBuffers pBufs(Pstream::commsTypes::nonBlocking);
+
+    if (Pstream::myProcNo() != cudaProcs)
+    {
+        UOPstream send(cudaProcs, pBufs);
+        send << problemList;
+
+        // solve odecell
+        forAll(T_, cellI)
+        {
+            scalar Ti = T_[cellI];
+            scalar pi = p_[cellI];
+            scalar rhoi = rho_[cellI];
+            if ((T_[cellI] < Tact_low) || (T_[cellI] > Tact_high))
+            {
+                Qdot_[cellI] = 0.0;
+                for (label i = 0; i < CanteraGas_->nSpecies(); ++i)
+                {
+                    yPre_[i] = Y_[i][cellI];
+                }
+
+                CanteraGas_->setState_TPY(Ti, pi, yPre_.begin());
+                react.insert(mixture_.CanteraSolution());
+                react.setEnergy(0);
+
+                Cantera::ReactorNet sim;
+                sim.addReactor(react);
+                setNumerics(sim);
+                sim.advance(deltaT);
+
+                CanteraGas_->getMassFractions(yTemp_.begin());
+
+                for (size_t i = 0; i < CanteraGas_->nSpecies(); i++)
+                {
+                    RR_[i][cellI] = (yTemp_[i] - yPre_[i]) * rhoi / deltaT;
+                    Qdot_[cellI] -= hc_[i] * RR_[i][cellI];
+                }
+            }
+        }
+    }
+
+    pBufs.finishedSends();
+
+    // cuda_procs
+    DynamicList<GpuSolution> solutionList;
+    DynamicList<DynamicList<GpuSolution>> solutionLists;
+
+    if (Pstream::myProcNo() == cudaProcs)
+    {
+        label torch_size = 0;
+        DynamicList<DynamicList<GpuProblem>> problemLists(Pstream::nProcs());
+        // gather data
+        for (label proci = 0; proci < Pstream::nProcs(); proci++)
+        {
+            if (proci != cudaProcs)
+            {
+                UIPstream recv(proci, pBufs);
+                recv >> problemLists[proci];
+                torch_size += problemLists[proci].size();
+            }
+            else
+            {
+                problemLists[cudaProcs] = problemList;
+                torch_size += problemLists[proci].size();
+            }
+        }
+
+        // obtain inputs vector
+        // torch::Tensor inputs(torch::zeros({torch_size,mixture_.nSpecies()+2}));
+        std::vector<label> Procs_GpuCell;
+        std::vector<double> inputs_;
+        inputs_.reserve(torch_size * (CanteraGas_->nSpecies() + 3));
+        for (label proci = 0; proci < Pstream::nProcs(); proci++)
+        {
+            label proc_torchcell = 0;
+            for (label cellid = 0; cellid < problemLists[proci].size(); cellid++)
+            {
+                inputs_.push_back(problemLists[proci][cellid].Ti);
+                inputs_.push_back(problemLists[proci][cellid].pi);
+                for (size_t i = 0; i < CanteraGas_->nSpecies(); i++)
+                {
+                    inputs_.push_back(problemLists[proci][cellid].Y[i]);
+                }
+                inputs_.push_back(problemLists[proci][cellid].rhoi);
+                proc_torchcell++;
+            }
+            Procs_GpuCell.push_back(proc_torchcell);
+        }
+        auto inputs = torch::tensor(inputs_);
+        inputs = inputs.reshape({torch_size, mixture_.nSpecies() + 3});
+
+        // Inference
+        at::Tensor outputs = CUDA_.Inference(inputs);
+
+        // solve odecell
+        forAll(T_, cellI)
+        {
+            scalar Ti = T_[cellI];
+            scalar pi = p_[cellI];
+            scalar rhoi = rho_[cellI];
+            if ((T_[cellI] < Tact_low) || (T_[cellI] > Tact_high))
+            {
+                Qdot_[cellI] = 0.0;
+                for (label i = 0; i < CanteraGas_->nSpecies(); ++i)
+                {
+                    yPre_[i] = Y_[i][cellI];
+                }
+
+                CanteraGas_->setState_TPY(Ti, pi, yPre_.begin());
+                react.insert(mixture_.CanteraSolution());
+                react.setEnergy(0);
+
+                Cantera::ReactorNet sim;
+                sim.addReactor(react);
+                setNumerics(sim);
+                sim.advance(deltaT);
+
+                CanteraGas_->getMassFractions(yTemp_.begin());
+
+                for (size_t i = 0; i < CanteraGas_->nSpecies(); i++)
+                {
+                    RR_[i][cellI] = (yTemp_[i] - yPre_[i]) * rhoi / deltaT;
+                    Qdot_[cellI] -= hc_[i] * RR_[i][cellI];
+                }
+            }
+        }
+
+        // output
+        outputs = outputs.to(at::kCPU);
+        std::vector<double> outputsVec(outputs.data_ptr<double>(), outputs.data_ptr<double>() + outputs.numel());
+
+        std::cout << outputs.numel() << std::endl;
+        std::cout << outputsVec.size() << std::endl;
+
+        GpuSolution solution(CanteraGas_->nSpecies());
+        label output_label = 0;
+
+        for (label proci = 0; proci < Pstream::nProcs(); proci++)
+        {
+            for (size_t cellI = 0; cellI < Procs_GpuCell[proci]; cellI++)
+            {
+                for (size_t i = 0; i < CanteraGas_->nSpecies(); i++)
+                {
+                    solution.RRi[i] = outputsVec[output_label * 7 + i];
+                }
+                solution.cellid = problemLists[proci][cellI].cellid;
+                solutionList.append(solution);
+                output_label++;
+            }
+            solutionLists.append(solutionList);
+            solutionList.clear();
+        }
+    }
+
+    // scatter
+    DynamicList<GpuSolution> finalList;
+    PstreamBuffers pBufs2(Pstream::commsTypes::nonBlocking);
+
+    if (Pstream::myProcNo() == cudaProcs)
+    {
+        for (label proci = 0; proci < Pstream::nProcs(); proci++)
+        {
+            if (proci != cudaProcs)
+            {
+                UOPstream send(proci, pBufs2);
+                send << solutionLists[proci];
+            }
+            else
+            {
+                finalList = solutionLists[proci];
+            }
+        }
+    }
+
+    pBufs2.finishedSends();
+
+    if (Pstream::myProcNo() != cudaProcs)
+    {
+        UIPstream recv(cudaProcs, pBufs2);
+        recv >> finalList;
+    }
+
+    for (size_t cellI = 0; cellI < finalList.size(); cellI++)
+    {
+        for (size_t i = 0; i < CanteraGas_->nSpecies(); i++)
+        {
+            RR_[i][finalList[cellI].cellid] = finalList[cellI].RRi[i];
+            Qdot_[finalList[cellI].cellid] -= hc_[i] * RR_[i][finalList[cellI].cellid];
+        }
+    }
+
+    /*forAll(T_, cellI)
+    {
+        scalar Ti = T_[cellI];
+        scalar pi = p_[cellI];
+        scalar rhoi = rho_[cellI];
+
+        if ((T_[cellI] >= Tact_low) && (T_[cellI] <= Tact_high))
+        {
+
+            Qdot_[cellI] = 0.0;
+
+            // set problems
+            GpuProblem problem(CanteraGas_->nSpecies());
+            problem.cellid = cellI;
+            problem.Ti = (Ti - Xmu_[0]) / Xstd_[0];
+            problem.pi = (pi / 101325 - Xmu_[1]) / Xstd_[1];
+            for (size_t i = 0; i < CanteraGas_->nSpecies(); i++)
+            {
+                yPre_[i] = Y_[i][cellI];
+                yBCT_[i] = (pow(yPre_[i], lambda) - 1) / lambda; // function BCT
+                problem.Y[i] = (yBCT_[i] - Xmu_[i+2]) / Xstd_[i+2];
+            }
+
+            problemList.append(problem);
+        }
+        else
+        {
+            Qdot_[cellI] = 0.0;
+            for (size_t i=0; i<CanteraGas_->nSpecies(); i++)
+            {
+                yPre_[i] = Y_[i][cellI];
+            }
+
+            CanteraGas_->setState_TPY(Ti, pi, yPre_.begin());
+            react.insert(mixture_.CanteraSolution());
+            react.setEnergy(0);
+
+            Cantera::ReactorNet sim;
+            sim.addReactor(react);
+            setNumerics(sim);
+            sim.advance(deltaT);
+
+            CanteraGas_->getMassFractions(yTemp_.begin());
+
+            for (size_t i=0; i<CanteraGas_->nSpecies(); i++)
             {
                 RR_[i][cellI] = (yTemp_[i] - yPre_[i])*rhoi/deltaT;
                 Qdot_[cellI] -= hc_[i]*RR_[i][cellI];
             }
         }
     }
-    // DNN
-    std::vector<torch::jit::IValue> INPUTS{inputs};
-    auto outputs_raw = torchModel_.forward(INPUTS);
-    auto outputs = outputs_raw.toTensor();
 
-    for(size_t cellI = 0; cellI<torch_cell.size(); cellI ++)
+    // MPI
+    if(Pstream::parRun())
     {
-        // update y
-        scalar Yt = 0;
-        for (size_t i=0; i<CanteraGas_->nSpecies(); ++i)
-        {
-            yPre_[i] = Y_[i][torch_cell[cellI]];
-            yTemp_[i] = Y_[i][torch_cell[cellI]];
-            yBCT_[i] = (pow(yPre_[i],lambda) - 1) / lambda; // function BCT
-        }
-        for (size_t i=0; i<(CanteraGas_->nSpecies()); ++i)//
-        {
-            u_[i+2] = outputs[cellI][i+2].item().to<double>()*Ystd_[i+2]+Ymu_[i+2];
-            yTemp_[i] = pow((yBCT_[i] + u_[i+2]*deltaT)*lambda+1,1/lambda);
-            Yt += yTemp_[i];
-        }
-        for (size_t i=0; i<CanteraGas_->nSpecies(); ++i)
-        {
-            yTemp_[i] = yTemp_[i] / Yt;
-            RR_[i][torch_cell[cellI]] = (yTemp_[i] - Y_[i][torch_cell[cellI]])*rho_[torch_cell[cellI]]/deltaT;
-            Qdot_[torch_cell[cellI]] -= hc_[i]*RR_[i][torch_cell[cellI]];
-        }
-    }
+        DynamicList<DynamicList<GpuProblem>> problemLists(Pstream::nProcs());
+        PstreamBuffers pBufs(Pstream::commsTypes::nonBlocking);
+        DynamicList<GpuSolution> finalList;
+        DynamicList<GpuSolution> sevList;
+        DynamicList<GpuSolution> solutionList;
+        DynamicList<DynamicList<GpuSolution>> solutionLists;
+        label output_label = 0;
 
-    Info<<"=== end torch&ode-solve === "<<endl;
+        if (Pstream::myProcNo())
+        {
+            UOPstream send(0, pBufs);
+            send << problemList;
+
+        }
+
+        pBufs.finishedSends();
+
+        if (! Pstream::myProcNo())
+        {
+            // gather data
+            problemLists[0] = problemList; // the problemList of process0
+
+            for (label proci = 1; proci < Pstream::nProcs(); proci ++)
+            {
+                UIPstream recv(proci, pBufs);
+                recv >> problemLists[proci];
+            }
+            // get total size
+            label torch_size = 0;
+            // for(const auto& array : problemLists)
+            for(label proci = 0; proci < Pstream::nProcs(); proci ++)
+            {
+                torch_size += problemLists[proci].size();
+            }
+            // Info<<"torch size = "<< torch_size << endl;
+            torch::Tensor inputs(torch::zeros({torch_size,mixture_.nSpecies()+2}));
+
+            // obtain inputs vector(try to make a function)
+            label torch_cellname = 0;
+            std::vector<label> process_GpuCell;
+
+            for (label proci = 0; proci < Pstream::nProcs(); proci ++)
+            {
+                label proc_torchcell = 0;
+                for (label m = 0; m < problemLists[proci].size(); m ++)
+                {
+                    std::vector<double> inputs_;
+                    inputs_.push_back(problemLists[proci][m].Ti);
+                    inputs_.push_back(problemLists[proci][m].pi);
+                    for (size_t i = 0; i < CanteraGas_->nSpecies(); i++)
+                    {
+                        inputs_.push_back(problemLists[proci][m].Y[i]);
+                    }
+                    inputs[torch_cellname] = torch::tensor(inputs_);
+                    torch_cellname ++;
+                    proc_torchcell ++;
+
+                }
+                process_GpuCell.push_back(proc_torchcell);
+            }
+            // Inference
+            at::Tensor outputs = CUDA_.Inference(inputs);
+
+
+            for(label proci = 0; proci < Pstream::nProcs(); proci ++)
+            {
+                for (size_t cellI = 0; cellI < process_GpuCell[proci]; cellI ++)
+                {
+                    scalar Yt = 0;
+                    GpuSolution solution(CanteraGas_->nSpecies());
+                    GpuProblem problemTmp(CanteraGas_->nSpecies());
+                    problemTmp = problemLists[proci][cellI];
+
+                    for (size_t i=0; i<(CanteraGas_->nSpecies()); i++)//
+                    {
+                        u_[i+2] = outputs[output_label][i+2].item().to<double>()*Ystd_[i+2]+Ymu_[i+2];
+                        yTemp_[i] = pow((problemTmp.Y[i] + u_[i+2]*deltaT)*lambda+1,1/lambda);
+                        Yt += yTemp_[i];
+                    }
+                    for (size_t i=0; i<CanteraGas_->nSpecies(); i++)
+                    {
+                        yTemp_[i] = yTemp_[i] / Yt;
+
+                        solution.RRi[i] = (yTemp_[i] - yPre_[i])*problemTmp.rhoi/deltaT;
+                        solution.cellid = problemTmp.cellid;
+                    }
+                    solutionList.append(solution);
+                    output_label ++;
+
+                }
+                solutionLists.append(solutionList);
+                solutionList.clear();
+            }
+
+        }
+
+        PstreamBuffers pBufs2(Pstream::commsTypes::nonBlocking);
+
+
+
+        if (!Pstream::myProcNo())
+        {
+            finalList = solutionLists[0];
+            for (label proci = 1; proci < Pstream::nProcs(); proci ++)
+            {
+                UOPstream send(proci, pBufs2);
+                send << solutionLists[proci];
+            }
+
+        }
+
+        pBufs2.finishedSends();
+
+        if (Pstream::myProcNo())
+        {
+            UIPstream recv(0, pBufs2);
+            recv >> finalList;
+        }
+
+        // for (const auto& solution : finalList)
+        for (size_t cellI = 0; cellI < finalList.size(); cellI ++)
+        {
+            for (size_t i=0; i<CanteraGas_->nSpecies(); i++)
+            {
+                RR_[i][finalList[cellI].cellid] = finalList[cellI].RRi[i];
+                Qdot_[finalList[cellI].cellid] -= hc_[i]*RR_[i][finalList[cellI].cellid];
+            }
+        }
+    }*/
+
+    Info << "=== end torch&ode-CUDAsolve === " << endl;
     return deltaTMin;
 }
 

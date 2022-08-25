@@ -30,7 +30,7 @@ zeroDReactor
 }
 
 torch on;
-torchModel "modelName.pt";
+torchModel "new_5000.pt";
 torchParameters
 {
     Xmu
@@ -84,6 +84,11 @@ torchParameters
         11752.979335965118
         4.0735353885293555e-09
     );
+}
+loadbalancing
+{
+        active  false;
+        //log   true;
 }
 
 // ************************************************************************* //
