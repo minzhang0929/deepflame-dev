@@ -61,7 +61,7 @@ namespace Foam
 class CanteraSpecies
 {
 protected:
-    class Impl;
+    struct Impl;
     std::unique_ptr<Impl> pimpl_;
     IOdictionary CanteraTorchProperties_;
     const word CanteraMechanismFile_;

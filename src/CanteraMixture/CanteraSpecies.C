@@ -28,49 +28,48 @@ License
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-class Foam::CanteraSpecies::Impl
+struct Foam::CanteraSpecies::Impl
 {
-private:
-    CanteraSpecies* CanteraSpeciesPtr;
+    CanteraSpecies* CanteraSpeciesPtr_;
     scalarList HaTemp_;
     scalarList CpTemp_;
     scalarList muTemp_;
 
-public:
-    Impl(CanteraSpecies* CanteraSpeciesPtr, const dictionary& thermoDict, const fvMesh& mesh, const word& phaseName){}
+    Impl(CanteraSpecies* CanteraSpeciesPtr, const dictionary& thermoDict, const fvMesh& mesh, const word& phaseName)
+    :CanteraSpeciesPtr_(CanteraSpeciesPtr) {}
 
     void calcCp(const scalar& p, const scalar& T)
     {
         const scalar RR = constant::physicoChemical::R.value()*1e3; // J/(kmol·k)
 
-        CanteraSpeciesPtr->CanteraGas_->setState_TP(T, p);
+        CanteraSpeciesPtr_->CanteraGas_->setState_TP(T, p);
 
-        scalarList Cp_R(CanteraSpeciesPtr->nSpecies());
-        CanteraSpeciesPtr->CanteraGas_->getCp_R(Cp_R.begin());
+        scalarList Cp_R(CanteraSpeciesPtr_->nSpecies());
+        CanteraSpeciesPtr_->CanteraGas_->getCp_R(Cp_R.begin());
         CpTemp_ = Cp_R*RR;
     }
 
     void calcMu(const scalar& p, const scalar& T)
     {
-        CanteraSpeciesPtr->CanteraGas_->setState_TP(T, p);
+        CanteraSpeciesPtr_->CanteraGas_->setState_TP(T, p);
 
-        CanteraSpeciesPtr->CanteraTransport_->getSpeciesViscosities(muTemp_.begin());
+        CanteraSpeciesPtr_->CanteraTransport_->getSpeciesViscosities(muTemp_.begin());
     }
 
     void calcH(const scalar& p, const scalar& T)
     {
         const scalar RT = constant::physicoChemical::R.value()*1e3*T; // J/kmol/K
 
-        CanteraSpeciesPtr->CanteraGas_->setState_TP(T, p);
+        CanteraSpeciesPtr_->CanteraGas_->setState_TP(T, p);
 
-        scalarList Ha_RT(CanteraSpeciesPtr->nSpecies());
-        CanteraSpeciesPtr->CanteraGas_->getEnthalpy_RT(Ha_RT.begin());
+        scalarList Ha_RT(CanteraSpeciesPtr_->nSpecies());
+        CanteraSpeciesPtr_->CanteraGas_->getEnthalpy_RT(Ha_RT.begin());
         HaTemp_ = Ha_RT*RT;
     }
 
     scalar Cp(label i, scalar p, scalar T) const
     {
-        return CpTemp_[i]/CanteraSpeciesPtr->CanteraGas_->molecularWeight(i);
+        return CpTemp_[i]/CanteraSpeciesPtr_->CanteraGas_->molecularWeight(i);
     }
 
     scalar mu(label i, scalar p, scalar T) const
@@ -80,7 +79,7 @@ public:
 
     scalar Ha(label i, scalar p, scalar T) const
     {
-        return HaTemp_[i]/CanteraSpeciesPtr->CanteraGas_->molecularWeight(i);
+        return HaTemp_[i]/CanteraSpeciesPtr_->CanteraGas_->molecularWeight(i);
     }
 };
 
@@ -106,6 +105,9 @@ Foam::CanteraSpecies::CanteraSpecies(const dictionary& thermoDict, const fvMesh&
     CanteraTransport_(newTransportMgr(transportModelName_, CanteraGas_.get())),
     Y_(nSpecies())
 {
+    pimpl_->HaTemp_.resize(nSpecies());
+    pimpl_->CpTemp_.resize(nSpecies());
+    pimpl_->muTemp_.resize(nSpecies());
     forAll(Y_, i)
     {
         species_.append(CanteraGas_->speciesName(i));
