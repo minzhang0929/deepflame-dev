@@ -357,6 +357,8 @@ void Foam::ReactingParcel<ParcelType>::correctSurfaceValues
     scalar sumYiSqrtW = 0;
     scalar sumYiCbrtW = 0;
 
+    carrier.calcMu(td.pc(), T);
+    carrier.calcCp(td.pc(), T);
     forAll(Ys, i)
     {
         const scalar W = carrier.Wi(i);
