@@ -85,6 +85,70 @@ abstract psiThermo{
 CanteraMixture <|-- heThermo : MixtureType
 psiThermo <|-- heThermo : BasicThermo
 
+
+
+
+
+
+namespace CanteraSpecies{
+    class CanteraSpecies{
+        #std::unique_ptr<Impl> pimpl_;
+        #IOdictionary CanteraTorchProperties_;
+        #const word CanteraMechanismFile_;
+        #std::shared_ptr<Cantera::Solution> CanteraSolution_;
+        #std::shared_ptr<Cantera::ThermoPhase> CanteraGas_;
+        #word transportModelName_;
+        #std::shared_ptr<Cantera::Transport> CanteraTransport_;
+        #hashedWordList species_;
+        #PtrList<volScalarField> Y_;
+        +void calcCp(const scalar& p, const scalar& T) const;
+        +void calcMu(const scalar& p, const scalar& T) const;
+        +void calcH(const scalar& p, const scalar& T) const;
+        +scalar Cp(label i, scalar p, scalar T) const;
+        +scalar mu(label i, scalar p, scalar T) const;
+        +scalar Ha(label i, scalar p, scalar T) const;
+        +scalar Hf(label i) const
+        +scalar Hs(label i, scalar p, scalar T) const
+        +scalar Wi(label i) const
+        +scalar kappa(label i, scalar p, scalar T) const
+        +const hashedWordList& species() const
+        +size_t nSpecies()
+        +std::shared_ptr<Cantera::ThermoPhase> CanteraGas()
+        +std::shared_ptr<Cantera::Solution> CanteraSolution()
+        +std::shared_ptr<Cantera::Transport> CanteraTransport()
+        +const word& transportModelName()
+        +PtrList<volScalarField>& Y()
+        +const PtrList<volScalarField>& Y() const
+        +volScalarField& Y(const label i)
+        +const volScalarField& Y(const label i) const
+        +volScalarField& Y(const word& specieName)
+        +const volScalarField& Y(const word& specieName) const
+        +bool contains(const word& specieName) const
+        +bool solve(label speciei) const
+        +label index(const volScalarField& Yi) const
+    }
+    CanteraSpecies *-- Impl
+    class Impl{
+        -CanteraSpecies* CanteraSpeciesPtr;
+        -scalarList HaTemp_;
+        -scalarList CpTemp_;
+        -scalarList muTemp_;
+        +void calcCp(const scalar T, const scalar p)
+        +void calcMu(const scalar T, const scalar p)
+        +void calcH(const scalar T, const scalar p)
+        +scalar Cp(label i, scalar p, scalar T) const
+        +scalar mu(label i, scalar p, scalar T) const
+        +scalar Ha(label i, scalar p, scalar T) const
+    }
+    Impl o-- CanteraSpecies
+}
+
+
+CanteraSpecies <|-- CanteraMixture
+
+
+
+
 CanteraMixture *-- Cantera.Solution
 CanteraMixture *-- Cantera.ThermoPhase
 CanteraMixture *-- Cantera.Transport
@@ -132,19 +196,6 @@ class CanteraMixture{
     +std::shared_ptr<Cantera::Solution> CanteraSolution()
     +std::shared_ptr<Cantera::Transport> CanteraTransport()
     +const word& transportModelName()
-    -scalarList HaTemp_
-    -scalarList CpTemp_
-    -scalarList muTemp_
-    +void calcCp(const scalar T, const scalar p)
-    +void calcMu(const scalar T, const scalar p)
-    +void calcH(const scalar T, const scalar p)
-    +scalar Cp(label i, scalar p, scalar T) const
-    +scalar mu(label i, scalar p, scalar T) const
-    +scalar Ha(label i, scalar p, scalar T) const
-    +scalar Hc(label i) const
-    +scalar Hs(label i, scalar p, scalar T) const
-    +scalar kappa(label i, scalar p, scalar T) const
-    +scalar Wi(label i) const
 }
 
 
