@@ -16,7 +16,7 @@ FoamFile
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 
-chemistry           off;
+chemistry           on;
 CanteraMechanismFile "C7_oneStep.yaml";
 transportModel "UnityLewis";
 odeCoeffs
