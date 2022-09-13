@@ -13,8 +13,7 @@ FoamFile
     location    "system";
     object      controlDict;
 }
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
-libs ("libfieldFunctionObjects.so");
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * /
 
 application     dfHighSpeedFoam;
 
@@ -54,13 +53,7 @@ maxDeltaT       1;
 
 functions
 {
-    minMax
-    {
-      type          fieldMinMax;
-      libs          ("libfieldFunctionObjects.so");
-      writeControl  timeStep; //writeTime;
-      fields        (p);
-    }
+    #includeFunc mag(U)
 }
 
 
