@@ -192,7 +192,7 @@ void Foam::LiquidEvaporationBoil<CloudType>::calculate
     this->owner().composition().carrier().calcCp(ps, Ts);
     forAll(this->owner().composition().carrier().Y(), i)
     {
-        scalar Yc = this->owner().composition().carrier().Y()[i][p.cell()];
+        const scalar Yc = this->owner().composition().carrier().Y()[i][p.cell()];
         Hsc += Yc*this->owner().composition().carrier().Ha(i, ps, Ts);
         Cpc += Yc*this->owner().composition().carrier().Cp(i, ps, Ts);
         kappac += Yc*this->owner().composition().carrier().kappa(i, ps, Ts);
@@ -336,6 +336,7 @@ Foam::scalar Foam::LiquidEvaporationBoil<CloudType>::dh
         }
         case (parent::etEnthalpyDifference):
         {
+            this->owner().composition().carrier().calcH(p, TDash);
             scalar hc = this->owner().composition().carrier().Ha(idc, p, TDash);
             scalar hp = liquids_.properties()[idl].Ha(p, TDash);
 

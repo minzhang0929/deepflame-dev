@@ -34,6 +34,8 @@ Description
     (
         fvm::ddt(rho)
       + fvc::div(phi)
+      ==
+        fvModels.source(rho)
     );
 
     rhoEqn.solve();
