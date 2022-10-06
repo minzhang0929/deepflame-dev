@@ -31,7 +31,7 @@ zeroDReactor
 
 torch on;
 torchModel "new_modle.pt"; 
-torchParameters  
+torchParameters1  
 {
     Xmu  
     (
@@ -140,6 +140,18 @@ torchParameters
         3.357557946945996e-05
         0.0
     );
+    Tact 0  ;
+    Qdotact  0 ;
+}
+torchParameters2
+{
+    Tact 1700;
+    Qdotact  1e5;
+}
+torchParameters3
+{
+    Tact 2500;
+    Qdotact  5e5;
 }
 loadbalancing
 {
