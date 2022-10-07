@@ -85,6 +85,7 @@ torchParameters
         4.0735353885293555e-09
     );
 }
+GPU on;
 loadbalancing
 {
         active  false;
