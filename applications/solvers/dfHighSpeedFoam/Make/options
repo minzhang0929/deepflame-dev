@@ -35,6 +35,6 @@ EXE_LIBS = \
     $(CANTERA_ROOT)/lib/libcantera.so \
     $(TORCH_ROOT)/lib/libtorch.so \
     $(TORCH_ROOT)/lib/libc10.so \
-    $(DF_SRC)/dfChemistryModel/GpuInference/build/libGpuInference.so \
+    $(DF_SRC)/dfChemistryModel/DNNInferencer/build/libDNNInferencer.so \
     -rdynamic \
     -lpthread

@@ -52,9 +52,7 @@ SourceFiles
 #include "loadBalancing/RecvBuffer.H"
 #include "loadBalancing/SendBuffer.H"
 #include "loadBalancing/LoadBalancer.H"
-#include "GpuInference/GpuInference.H"
-#include "GpuInference/GpuProblem.H"
-#include "GpuInference/GpuSolution.H"
+#include "DNNInferencer/DNNInferencer.H"
 #include "OFstream.H"
 #include "IOmanip.H"
 #include "PstreamGlobals.H"
@@ -114,7 +112,8 @@ public IOdictionary
     // heat release rate, [J/m^3/s]
     volScalarField Qdot_;
 
-    Switch torchSwitch_;
+    Switch torch_;
+    Switch gpu_;
     word torchModelName_;
     scalarList Xmu_;
     scalarList Xstd_;
@@ -123,7 +122,7 @@ public IOdictionary
     scalar Tact_low;
     scalar Tact_high;
     scalar Qdotact_;
-    GpuInference CUDA_;
+    DNNInferencer DNNInferencer_;
 
     // Load balancing object
     LoadBalancer balancer_;
@@ -146,20 +145,47 @@ public IOdictionary
         template<class DeltaTType>
         scalar solve(const DeltaTType& deltaT);
 
+        /*============= available operations for the solution of chemistry =============*/
+        //- CVODE solver
         template<class DeltaTType>
-        scalar canteraSolve(const DeltaTType& deltaT);
+        scalar solve_CVODE(const DeltaTType& deltaT);
 
+        //- DNN solver
         template<class DeltaTType>
-        scalar torchSolve(const DeltaTType& deltaT);
+        scalar solve_DNN(const DeltaTType& deltaT);
 
+        //- DNN solver that support the use of GPU (one card)
         template<class DeltaTType>
-        scalar torchCUDAoneCoreSimplestSolve(const DeltaTType& deltaT);
+        scalar solve_DNN_oneCore(const DeltaTType& deltaT);
 
+        /*============= private functions adopted by solve_CVODE =============*/
+        //- Solve a single ChemistryProblem and put the solution to ChemistrySolution
+        void solveSingle(ChemistryProblem& problem, ChemistrySolution& solution);
+
+        //- Get the list of problems to be solved
         template<class DeltaTType>
-        scalar torchCUDAoneCoreSolve(const DeltaTType& deltaT);
-        
-        template<class DeltaTType>
-        scalar torchCUDASolve(const DeltaTType& deltaT);
+        DynamicList<ChemistryProblem> getProblems(const DeltaTType& deltaT);
+
+        //- Solve a list of chemistry problems and return a list of solutions
+        DynamicList<ChemistrySolution>
+        solveList(UList<ChemistryProblem>& problems);
+
+        //- Solve the problem buffer coming from the balancer
+        RecvBuffer<ChemistrySolution>
+        solveBuffer(RecvBuffer<ChemistryProblem>& problems);
+
+        //- Update the reaction rates from a list of solutions
+        scalar updateReactionRates(const RecvBuffer<ChemistrySolution>& solutions);
+
+        //- Create a load balancer object
+        LoadBalancer createBalancer();
+
+        Foam::autoPtr<Foam::OFstream> logFile(const word& name) const
+        {
+            mkDir(mesh_.time().path() / "loadBal" / this->group());
+            return autoPtr<OFstream>(new OFstream(
+                mesh_.time().path() / "loadBal" / this->group() / name));
+        }
 
 public:
 
@@ -208,35 +234,6 @@ public:
 
         // update T, psi, mu, alpha, rhoD, hai (if needed)
         void correctThermo();
-
-        void solveSingle(ChemistryProblem& problem, ChemistrySolution& solution);
-
-        template<class DeltaTType>
-        DynamicList<ChemistryProblem> getProblems(const DeltaTType& deltaT);
-
-        //- Solve a list of chemistry problems and return a list of solutions
-        DynamicList<ChemistrySolution>
-        solveList(UList<ChemistryProblem>& problems);
-
-        //- Solve the problem buffer coming from the balancer
-        RecvBuffer<ChemistrySolution>
-        solveBuffer(RecvBuffer<ChemistryProblem>& problems);
-
-        //- Update the reaction rates from a list of solutions
-        scalar updateReactionRates(const RecvBuffer<ChemistrySolution>& solutions);
-
-        //- Create a load balancer object
-        LoadBalancer createBalancer();
-
-        template<class DeltaTType>
-        scalar solve_loadBalance(const DeltaTType& deltaT);
-
-        Foam::autoPtr<Foam::OFstream> logFile(const word& name) const
-        {
-            mkDir(mesh_.time().path() / "loadBal" / this->group());
-            return autoPtr<OFstream>(new OFstream(
-                mesh_.time().path() / "loadBal" / this->group() / name));
-        }
 };
 
 

@@ -13,10 +13,10 @@
 
 
 # cp bashrc.raw bashrc
-# sed -i s#pwd#$PWD#g ./bashrc
+sed -i s#pwd#$PWD#g ./bashrc
 # sed -i s#CONDA_PREFIX#$CONDA_PREFIX#g ./bashrc
-# TORCH_DIR=$PWD/thirdParty/libtorch
-# sed -i s#TORCH_DIR#$TORCH_DIR#g ./bashrc
+TORCH_DIR=//home/runze/libtorch1
+sed -i s#TORCH_DIR#$TORCH_DIR#g ./bashrc
 
 
 

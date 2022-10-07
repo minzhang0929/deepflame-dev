@@ -1,13 +1,22 @@
-#include "GpuInference.H"
+#include "DNNInferencer.H"
 
-GpuInference::GpuInference() : device(torch::kCUDA) {}
+DNNInferencer::DNNInferencer() : device_(torch::kCUDA) {}
 
-GpuInference::GpuInference(torch::jit::script::Module torchModel)
-    : torchModel(torchModel), device(torch::kCUDA)
+DNNInferencer::DNNInferencer(torch::jit::script::Module torchModel, bool gpu)
+    : torchModel_(torchModel), device_(torch::kCUDA), gpu_(gpu)
 {
-    torchModel.to(device);
-    at::TensorOptions opts = at::TensorOptions().dtype(at::kDouble).device(at::kCUDA);
-    // at::TensorOptions opts = at::TensorOptions().device(at::kCUDA);
+    at::TensorOptions opts;
+    if (gpu_)
+    {
+        opts = at::TensorOptions().dtype(at::kDouble).device(at::kCUDA);
+    }
+    else
+    {
+        torch::Device device(at::kCPU);
+        device_ = device;
+        opts = at::TensorOptions().dtype(at::kDouble).device(at::kCPU);
+    }
+    torchModel_.to(device_);
     Xmu_vec = torch::tensor({1933.118541482812,
                              1.2327983023706526,
                              -5.705591538151852,
@@ -44,19 +53,15 @@ GpuInference::GpuInference(torch::jit::script::Module torchModel)
                               11752.979335965118,
                               4.0735353885293555e-09},
                              opts);
-    // printf("Ystd_vec = %.10lf \n", Ystd_vec[5].item().to<double>());
-    // std::cout << Ystd_vec << std::endl;
     std::cout << "load model and parameters successfully" << std::endl;
 }
 
-GpuInference::~GpuInference() {}
+DNNInferencer::~DNNInferencer() {}
 
 // Inference
-at::Tensor GpuInference::Inference(torch::Tensor inputs)
+at::Tensor DNNInferencer::Inference(torch::Tensor inputs)
 {
-
-    // torch::Tensor cudaInputs = inputs.to(device).toType(torch::kDouble);
-    torch::Tensor cudaInputs = inputs.to(device);
+    torch::Tensor cudaInputs = inputs.to(device_);
 
     // generate tmpTensor
     auto Xmu_tensor = torch::unsqueeze(Xmu_vec, 0);
@@ -68,39 +73,27 @@ at::Tensor GpuInference::Inference(torch::Tensor inputs)
     torch::Tensor rhoInputs = torch::unsqueeze(cudaInputs.select(1, cudaInputs.sizes()[1] - 1), 1);
     torch::Tensor TInputs = torch::unsqueeze(cudaInputs.select(1, 0), 1);
     torch::Tensor pInputs = torch::unsqueeze(cudaInputs.select(1, 1) / 101325, 1);
-    torch::Tensor YIndices = torch::linspace(2, cudaInputs.sizes()[1] - 2, cudaInputs.sizes()[1] - 3, device).toType(torch::kLong);
+    torch::Tensor YIndices = torch::linspace(2, cudaInputs.sizes()[1] - 2, cudaInputs.sizes()[1] - 3, device_).toType(torch::kLong);
     torch::Tensor YInputs = torch::index_select(cudaInputs, 1, YIndices);
     torch::Tensor YInputs_BCT = (torch::pow(YInputs, 0.1) - 1) / 0.1;
 
     torch::Tensor InfInputs = torch::cat({TInputs, pInputs, YInputs_BCT}, 1);
     InfInputs = (InfInputs - Xmu_tensor) / Xstd_tensor;
 
-    // printf("Inputs_D = %.10lf \n", InfInputs[0][5].item().to<double>());
-
     InfInputs = InfInputs.toType(torch::kFloat);
-
-    // printf("Inputs_F = %.10lf \n", InfInputs[0][5].item().to<double>());
 
     // inference and time monitor
     std::vector<torch::jit::IValue> INPUTS;
     INPUTS.push_back(InfInputs);
 
-    at::Tensor cudaOutput = torchModel.forward(INPUTS).toTensor();
-
-    // printf("Outputs_F = %.10lf \n", cudaOutput[0][5].item().to<double>());
-
-    // cudaOutput = cudaOutput.toType(torch::kDouble);
-
-    // printf("Outputs_D = %.10lf \n", cudaOutput[0][5].item().to<double>());
+    at::Tensor cudaOutput = torchModel_.forward(INPUTS).toTensor();
 
     // generate outputTensor
     torch::Tensor deltaY = torch::index_select(cudaOutput, 1, YIndices);
     deltaY = deltaY * Ystd_tensor + Ymu_tensor;
     torch::Tensor Youtputs = torch::pow((YInputs_BCT + deltaY * 0.000001) * 0.1 + 1, 10);
-    // torch::Tensor Y_sum = torch::sum(Youtputs, 1, 1);
     Youtputs = Youtputs / torch::sum(Youtputs, 1, 1);
     Youtputs = ((Youtputs - YInputs) * rhoInputs / 0.000001);
-    // printf("Outputs = %lf \n", Youtputs[0][5].item().to<double>());
 
     return Youtputs;
 };
