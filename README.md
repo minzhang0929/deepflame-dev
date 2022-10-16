@@ -1,10 +1,14 @@
-# DeepFlame v0.4.0
-DeepFlame is a computational fluid dynamics suite for single or multiphase, laminar or turbulent reacting flows at all speeds with machine learning capabilities. It aims to provide an open-source platform bringing together the individual strengths of [OpenFOAM](https://openfoam.org), [Cantera](https://cantera.org) and [pyTorch](https://pytorch.org/) libraries for machine learning assisted reacting flow simulations. It is also has the scope to incorporate next-generation heterogenous supercomputing and AI acceleration infrustructures such as GPU and FPGAs.
+# DeepFlame v0.5.0
+DeepFlame is a computational fluid dynamics suite for single or multiphase, laminar or turbulent reacting flows at all speeds with machine learning capabilities. It aims to provide an open-source platform bringing together the individual strengths of [OpenFOAM](https://openfoam.org), [Cantera](https://cantera.org) and [PyTorch](https://pytorch.org/) libraries for machine learning assisted reacting flow simulations. It is also has the scope to incorporate next-generation heterogenous supercomputing and AI acceleration infrustructures such as GPU and FPGAs.
 
 ## Dependencies
-[OpenFOAM-7](https://openfoam.org/version/7), [Cantera C++ lib 2.6.0](https://anaconda.org/conda-forge/libcantera-devel), [Torch C++ lib 1.11.0](https://pytorch.org/)
+[OpenFOAM-7](https://openfoam.org/version/7), [Cantera C++ lib 2.6.0](https://anaconda.org/conda-forge/libcantera-devel), [Torch lib 1.11.0](https://pytorch.org/)
 
 ## Features
+New in v0.5.0 (2022/10/15):
+- Add support for the parallel computation of DNN via AI acceleration infrustructures (i.e. GPU)
+- Add access for utilising PyTorch
+
 New in v0.4.0 (2022/09/26):
 - Adapt combustion library from OpenFOAM into DeepFlame
 - laminar; EDC; PaSR combustion models
@@ -37,7 +41,7 @@ From v0.1.0 (2022/06/15):
   - 3D Aachen Bomb Spray Flame
 
 ## How to install
-The installation of DeepFlame is simple and requires [OpenFOAM-7](https://openfoam.org/version/7), [LibCantera](https://anaconda.org/conda-forge/libcantera-devel) and [LibTorch](https://pytorch.org/) .
+The installation of DeepFlame is simple and requires [OpenFOAM-7](https://openfoam.org/version/7), [LibCantera](https://anaconda.org/conda-forge/libcantera-devel) and [PyTorch](https://pytorch.org/) .
 
 ### 1. Install [OpenFOAM-7](https://openfoam.org/version/7) (if not already installed)
 
@@ -54,13 +58,18 @@ sudo apt-get -y install openfoam7
 ```
 source $HOME/OpenFOAM/OpenFOAM-7/etc/bashrc
 ```
-### 3. Install [LibCantera](https://anaconda.org/conda-forge/libcantera-devel) via [conda](https://docs.conda.io/en/latest/miniconda.html#linux-installers)
-```
-conda create -n libcantera
+### 3. Install [LibCantera](https://anaconda.org/conda-forge/libcantera-devel), [PyTorch](https://github.com/pytorch/pytorch) and [pybind11](https://github.com/pybind/pybind11) via [conda](https://docs.conda.io/en/latest/miniconda.html#linux-installers)
+```bash
+conda create -n deepflame
 
-conda activate libcantera
+conda activate deepflame
 
 conda install -c cantera libcantera-devel
+
+# the command for installing pytorch is based on your own hardware in https://pytorch.org/
+conda install pytorch torchvision torchaudio cudatoolkit=11.6 -c pytorch -c conda-forge
+
+conda install pybind11
 ```
 Note: Check your Miniconda3/envs/libcantera directory and make sure the install was successful (lib/ include/ etc. exist).
 
@@ -70,13 +79,8 @@ git clone https://github.com/deepmodeling/deepflame-dev.git
 
 cd deepflame-dev
 ```
-### 5. Install precompiled [LibTorch](https://pytorch.org/)
-```
-wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-1.11.0%2Bcpu.zip
 
-unzip libtorch-cxx11-abi-shared-with-deps-1.11.0+cpu.zip -d thirdParty
-```
-### 6. Install DeepFlame
+### 5. Install DeepFlame
 ```
 . install.sh
 ```
