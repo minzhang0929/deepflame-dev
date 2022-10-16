@@ -41,7 +41,7 @@ From v0.1.0 (2022/06/15):
   - 3D Aachen Bomb Spray Flame
 
 ## How to install
-The installation of DeepFlame is simple and requires [OpenFOAM-7](https://openfoam.org/version/7), [LibCantera](https://anaconda.org/conda-forge/libcantera-devel) and [LibTorch](https://pytorch.org/) .
+The installation of DeepFlame is simple and requires [OpenFOAM-7](https://openfoam.org/version/7), [LibCantera](https://anaconda.org/conda-forge/libcantera-devel) and [PyTorch](https://pytorch.org/) .
 
 ### 1. Install [OpenFOAM-7](https://openfoam.org/version/7) (if not already installed)
 
@@ -66,8 +66,7 @@ conda activate deepflame
 
 conda install -c cantera libcantera-devel
 
-# the command for installing pytorch is based on your own hardware
-# and can be obtained from https://pytorch.org/
+# the command for installing pytorch is based on your own hardware in https://pytorch.org/
 conda install pytorch torchvision torchaudio cudatoolkit=11.6 -c pytorch -c conda-forge
 
 conda install pybind11
