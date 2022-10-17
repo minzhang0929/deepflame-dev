@@ -39,6 +39,7 @@ SourceFiles
 #define dfChemistryModel_H
 
 #include <torch/script.h>
+#include <string> 
 #include "CanteraMixture.H"
 #include "IOdictionary.H"
 #include "Switch.H"
@@ -53,6 +54,9 @@ SourceFiles
 #include "loadBalancing/SendBuffer.H"
 #include "loadBalancing/LoadBalancer.H"
 #include "DNNInferencer/DNNInferencer.H"
+#include "DNNInferencer/DynamicBuffer.H"
+#include "DNNInferencer/GpuProblem.H"
+#include "DNNInferencer/GpuSolution.H"
 #include "OFstream.H"
 #include "IOmanip.H"
 #include "PstreamGlobals.H"
@@ -123,6 +127,30 @@ public IOdictionary
     scalar Tact_high;
     scalar Qdotact_;
     DNNInferencer DNNInferencer_;
+    int coresPerGPU;
+    int GPUsPerNode;
+
+    word torchModelName1_;
+    scalar Tact1_;
+    scalar Qdotact1_;
+    
+    word torchModelName2_;
+    scalar Tact2_;
+    scalar Qdotact2_;
+    
+    word torchModelName3_;  
+    scalar Tact3_;
+    scalar Qdotact3_;
+
+    // profiling
+    double time_allsolve_;
+    double time_submaster_;
+    double time_sendProblem_;
+    double time_RecvProblem_;
+    double time_sendRecvSolution_;
+    double time_getDNNinputs_;
+    double time_DNNinference_;
+    double time_updateSolutionBuffer_;
 
     // Load balancing object
     LoadBalancer balancer_;
@@ -158,7 +186,11 @@ public IOdictionary
         template<class DeltaTType>
         scalar solve_DNN_oneCore(const DeltaTType& deltaT);
 
-        /*============= private functions adopted by solve_CVODE =============*/
+        //- DNN solver that support the use of GPU (multi-cards)
+        template<class DeltaTType>
+        scalar solve_DNN_CUDA(const DeltaTType& deltaT);
+
+        /*============= private methods in solve_CVODE =============*/
         //- Solve a single ChemistryProblem and put the solution to ChemistrySolution
         void solveSingle(ChemistryProblem& problem, ChemistrySolution& solution);
 
@@ -186,6 +218,21 @@ public IOdictionary
             return autoPtr<OFstream>(new OFstream(
                 mesh_.time().path() / "loadBal" / this->group() / name));
         }
+
+        /*=======================private methods in solve_DNN_CUDA=======================*/
+        //- get a list of GPU problems to be solved
+        template<class DeltaTType>
+        DynamicList<GpuProblem> getGPUProblems(const DeltaTType& deltaT);
+
+        //- get the input for DNN inference
+        void getDNNinputs(const DynamicBuffer<GpuProblem>& problemBuffer, std::vector<label>& outputlength,
+        std::vector<std::vector<double>>& DNNinputs, std::vector<DynamicBuffer<label>>& cellIDBuffer, 
+        std::vector<std::vector<label>>& problemCounter);
+
+        //- construct the output
+        void updateSolutionBuffer(DynamicBuffer<GpuSolution>& solutionBuffer, const std::vector<std::vector<double>>& results,
+        const std::vector<label>& outputLength, const std::vector<DynamicBuffer<label>>& cellIDBuffer,
+        std::vector<std::vector<label>>& problemCounter);
 
 public:
 
@@ -234,6 +281,17 @@ public:
 
         // update T, psi, mu, alpha, rhoD, hai (if needed)
         void correctThermo();
+
+        // profiling
+        double time_allsolve() {return time_allsolve_;}
+        double time_submaster() {return time_submaster_;}
+        double time_sendProblem() {return time_sendProblem_;}
+        double time_RecvProblem() {return time_RecvProblem_;}
+        double time_sendRecvSolution() {return time_sendRecvSolution_;}
+        double time_getDNNinputs() {return time_getDNNinputs_;}
+        double time_DNNinference() {return time_DNNinference_;}
+        double time_updateSolutionBuffer() {return time_updateSolutionBuffer_;}
+
 };
 
 

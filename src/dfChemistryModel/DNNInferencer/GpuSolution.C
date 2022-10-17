@@ -22,68 +22,15 @@ License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
 Class
-    Foam::ChemistrySolution
-    
+    Foam::GpuProblem
+
 Description
-    A small object containing everything required for updating the reaction rate
-    and the chemistry time step. These are passed around in the load balancer.
+    A small object containing everything required for solving the reaction rate
+    using the ODE solver. These are passed around in the load balancer.
 
 \*---------------------------------------------------------------------------*/
 
-#ifndef ChemistrySolution_H
-#define ChemistrySolution_H
+#include "GpuSolution.H"
+namespace Foam{
 
-#include "volFields.H"
-
-namespace Foam
-{
-
-struct ChemistrySolution
-{
-
-    ChemistrySolution() = default;
-
-    ChemistrySolution(label nspecie)
-        : RRi(nspecie, 0.0), cpuTime(0.0), cellid(0), Qdoti(0.0)
-    {
-    }
-
-    bool operator==(const ChemistrySolution& rhs) const
-    {
-        return false;
-    }
-
-    bool operator!=(const ChemistrySolution& rhs) const
-    {
-        return !(*this == rhs);
-    }
-
-    scalarList RRi;
-    scalar cpuTime;
-    label cellid;
-    scalar Qdoti;
-};
-
-//- Serialization for send
-static inline Ostream& operator<<(Ostream& os, const ChemistrySolution& s)
-{
-    os << s.RRi;
-    os << s.cpuTime;
-    os << s.cellid;
-    os << s.Qdoti;
-    return os;
 }
-
-//- Get a serialized solution from IStream
-static inline Istream& operator>>(Istream& is, ChemistrySolution& s)
-{
-    is >> s.RRi;
-    is >> s.cpuTime;
-    is >> s.cellid;
-    is >> s.Qdoti;
-    return is;
-}
-
-} // namespace Foam
-
-#endif

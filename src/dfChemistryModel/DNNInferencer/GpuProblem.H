@@ -22,65 +22,75 @@ License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
 Class
-    Foam::ChemistrySolution
-    
+    Foam::GpuProblem
+
 Description
-    A small object containing everything required for updating the reaction rate
-    and the chemistry time step. These are passed around in the load balancer.
+    A small object containing everything required for solving the reaction rate
+    using the ODE solver. These are passed around in the load balancer.
 
 \*---------------------------------------------------------------------------*/
 
-#ifndef ChemistrySolution_H
-#define ChemistrySolution_H
+#ifndef GpuProblem_H
+#define GpuProblem_H
 
 #include "volFields.H"
 
 namespace Foam
 {
 
-struct ChemistrySolution
+struct GpuProblem
 {
 
-    ChemistrySolution() = default;
-
-    ChemistrySolution(label nspecie)
-        : RRi(nspecie, 0.0), cpuTime(0.0), cellid(0), Qdoti(0.0)
+    GpuProblem() = default;
+    GpuProblem(label nSpecie)
+        : Y(nSpecie), Ti(0), pi(0), rhoi(0), DNNid(0), cellid(0)
     {
     }
 
-    bool operator==(const ChemistrySolution& rhs) const
+    scalarList Y;
+    scalar Ti;
+    scalar pi;
+    scalar rhoi;
+    label DNNid;
+    label cellid;
+
+    // TODO: implement!
+    bool operator==(const GpuProblem& rhs) const
     {
         return false;
     }
 
-    bool operator!=(const ChemistrySolution& rhs) const
+    bool operator!=(const GpuProblem& rhs) const
     {
         return !(*this == rhs);
     }
-
-    scalarList RRi;
-    scalar cpuTime;
-    label cellid;
-    scalar Qdoti;
 };
 
 //- Serialization for send
-static inline Ostream& operator<<(Ostream& os, const ChemistrySolution& s)
+static inline Ostream& operator<<(Ostream& os, const GpuProblem& p)
 {
-    os << s.RRi;
-    os << s.cpuTime;
-    os << s.cellid;
-    os << s.Qdoti;
+
+    os << p.Y;
+    os << p.Ti;
+    os << p.pi;
+    os << p.rhoi;
+    os << p.DNNid;
+    os << p.cellid;
+
     return os;
 }
 
-//- Get a serialized solution from IStream
-static inline Istream& operator>>(Istream& is, ChemistrySolution& s)
+//- Get a serialized problem from IStream
+static inline Istream& operator>>(Istream& is, GpuProblem& p)
 {
-    is >> s.RRi;
-    is >> s.cpuTime;
-    is >> s.cellid;
-    is >> s.Qdoti;
+
+    is >> p.Y;
+    is >> p.Ti;
+    is >> p.pi;
+    is >> p.rhoi;
+    is >> p.DNNid;
+    is >> p.cellid;
+
     return is;
 }
 
