@@ -36,6 +36,9 @@ Description
 #include "dfChemistryModel.H"
 #include "CanteraMixture.H"
 #include "hePsiThermo.H"
+#include <pybind11/embed.h>
+#include <pybind11/numpy.h>
+#include <pybind11/stl.h> //used to convert
 
 #include "fvCFD.H"
 #include "fluidThermo.H"
@@ -45,16 +48,20 @@ Description
 #include "localEulerDdtScheme.H"
 #include "fvcSmooth.H"
 #include "PstreamGlobals.H"
-#include "basicThermo.H"
-#include "CombustionModel.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 int main(int argc, char *argv[])
 {
+    // initialize pybind
+    pybind11::scoped_interpreter guard{}; //start python interpreter
+
     #include "postProcess.H"
 
-    #include "setRootCaseLists.H"
+    // #include "setRootCaseLists.H"
+    #include "listOptions.H"
+    #include "setRootCase2.H"
+    #include "listOutput.H"
     #include "createTime.H"
     #include "createMesh.H"
     #include "createDyMControls.H"
@@ -62,11 +69,10 @@ int main(int argc, char *argv[])
     #include "createFields.H"
     #include "createRhoUfIfPresent.H"
 
-    double time_monitor_flow=0;
-    double time_monitor_chem=0;
-    double time_monitor_Y=0;
-    double time_monitor_E=0;
-    double time_monitor_corrThermo=0;
+    double time_monitor_flow;
+    double time_monitor_chem;
+    double time_monitor_Y;
+    label timeIndex = 0;
     clock_t start, end;
 
     turbulence->validate();
@@ -102,6 +108,10 @@ int main(int argc, char *argv[])
         // --- Pressure-velocity PIMPLE corrector loop
         while (pimple.loop())
         {
+            if (splitting) 
+            {
+                #include "YEqn_RR.H"
+            }
             if (pimple.firstPimpleIter() || moveMeshOuterCorrectors)
             {
                 // Store momentum to set rhoUf for introduced faces.
@@ -123,17 +133,8 @@ int main(int argc, char *argv[])
             time_monitor_flow += double(end - start) / double(CLOCKS_PER_SEC);
 
             #include "YEqn.H"
-
-            start = std::clock();
             #include "EEqn.H"
-            end = std::clock();
-            time_monitor_E += double(end - start) / double(CLOCKS_PER_SEC);
-
-            start = std::clock();
-            chemistry->correctThermo();
-            end = std::clock();
-            time_monitor_corrThermo += double(end - start) / double(CLOCKS_PER_SEC);
-
+            chemistry.correctThermo();
             Info<< "min/max(T) = " << min(T).value() << ", " << max(T).value() << endl;
 
             // --- Pressure corrector loop
@@ -166,11 +167,13 @@ int main(int argc, char *argv[])
         Info<< "MonitorTime_chem = " << time_monitor_chem << " s" << nl << endl;
         Info<< "MonitorTime_Y = " << time_monitor_Y << " s" << nl << endl;
         Info<< "MonitorTime_flow = " << time_monitor_flow << " s" << nl << endl;
-        Info<< "MonitorTime_E = " << time_monitor_E << " s" << nl << endl;
-        Info<< "MonitorTime_corrThermo = " << time_monitor_corrThermo << " s" << nl << endl;
 
         Info<< "ExecutionTime = " << runTime.elapsedCpuTime() << " s"
             << "  ClockTime = " << runTime.elapsedClockTime() << " s"
+            << "    allsolveTime = " << chemistry.time_allsolve() << " s" << nl
+            << "    getDNNinputsTime = " << chemistry.time_getDNNinputs() << " s"
+            << "    DNNinferenceTime = " << chemistry.time_DNNinference() << " s"
+            << "    updateSolutionBufferTime = " << chemistry.time_updateSolutionBuffer() << " s"
             << nl << endl;
     }
 
