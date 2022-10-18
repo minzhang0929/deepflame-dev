@@ -22,6 +22,14 @@ volScalarField rho
     thermo.rho()
 );
 
+dfChemistryModel<basicThermo> chemistry(thermo);
+PtrList<volScalarField>& Y = chemistry.Y();
+const word inertSpecie(chemistry.lookup("inertSpecie"));
+const label inertIndex(chemistry.species()[inertSpecie]);
+
+chemistry.correctThermo();
+Info<< "At initial time, min/max(T) = " << min(T).value() << ", " << max(T).value() << endl;
+
 Info<< "Reading field U\n" << endl;
 volVectorField U
 (
@@ -54,21 +62,6 @@ autoPtr<compressible::turbulenceModel> turbulence
     )
 );
 
-Info<< "Creating reaction model\n" << endl;
-autoPtr<CombustionModel<basicThermo>> combustion
-(
-    CombustionModel<basicThermo>::New(thermo, turbulence())
-);
-Info<< "end Creating reaction model\n" << endl;
-dfChemistryModel<basicThermo>* chemistry = combustion->chemistry();
-PtrList<volScalarField>& Y = chemistry->Y();
-const word inertSpecie(chemistry->lookup("inertSpecie"));
-const label inertIndex(chemistry->species()[inertSpecie]);
-
-
-chemistry->correctThermo();
-Info<< "At initial time, min/max(T) = " << min(T).value() << ", " << max(T).value() << endl;
-
 Info<< "Creating field dpdt\n" << endl;
 volScalarField dpdt
 (
@@ -92,7 +85,7 @@ forAll(Y, i)
 }
 fields.add(thermo.he());
 
-const scalar Sct = chemistry->lookupOrDefault("Sct", 1.);
+const scalar Sct = chemistry.lookupOrDefault("Sct", 1.);
 volScalarField diffAlphaD
 (
     IOobject
@@ -132,3 +125,15 @@ volVectorField sumYDiffError
     mesh,
     dimensionedVector("sumYDiffError", dimDynamicViscosity/dimLength, Zero)
 );
+IOdictionary CanteraTorchProperties
+(
+    IOobject
+    (
+        "CanteraTorchProperties",
+        runTime.constant(),
+        mesh,
+        IOobject::MUST_READ,
+        IOobject::NO_WRITE
+    )
+);
+const Switch splitting = CanteraTorchProperties.lookupOrDefault("splittingStrategy", false);
