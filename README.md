@@ -6,7 +6,7 @@ DeepFlame is a computational fluid dynamics suite for single or multiphase, lami
 
 ## Features
 New in v0.5.0 (2022/10/15):
-- Add support for the parallel computation of DNN via AI acceleration infrustructures (i.e. GPU)
+- Add support for the parallel computation of DNN via single and multiple GPUs
 - Add access for utilising PyTorch
 
 New in v0.4.0 (2022/09/26):
@@ -108,7 +108,11 @@ Note: For the example cases with torchSolver, an additional DNN model file in th
 ## Citing DeepFlame
 If you use DeepFlame for a publication, please use the citation:
 
-DeepFlame: A computational fluid dynamics suite for multiphase turbulent reacting flows at all speeds with machine learning. URL:https://github.com/deepmodeling/deepflame-dev, 2022.
+Runze Mao, Minqi Lin, Yan Zhang, Tianhan Zhang, Zhi-Qin John Xu, Zhi X. Chen. DeepFlame: A deep learning empowered open-source platform for reacting flow simulations (2022). [doi:10.48550/arXiv.2210.07094](https://doi.org/10.48550/arXiv.2210.07094)
+
+If you have used the DNN model provided from us, please use the citation:
+
+Tianhan Zhang, Yuxiao Yi, Yifan Xu, Zhi X. Chen, Yaoyu Zhang, Weinan E, Zhi-Qin John Xu. A multi-scale sampling method for accurate and robust deep neural network to predict combustion chemical kinetics. Combust. Flame 245:112319 (2022). [doi:10.1016/j.combustflame.2022.112319](https://doi.org/doi:10.1016/j.combustflame.2022.112319)
 
 ## Useful resources
 - First release v0.1.0 introduction talk (in Chinese) on [DeepModeling Community's official bilibili website](https://www.bilibili.com/video/BV1Vf4y1f7wB?vd_source=309a67109ca33c4ef79bf506f8ce70ab).
