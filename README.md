@@ -1,5 +1,5 @@
 # DeepFlame v0.5.0
-DeepFlame is a computational fluid dynamics suite for single or multiphase, laminar or turbulent reacting flows at all speeds with machine learning capabilities. It aims to provide an open-source platform bringing together the individual strengths of [OpenFOAM](https://openfoam.org), [Cantera](https://cantera.org) and [PyTorch](https://pytorch.org/) libraries for machine learning assisted reacting flow simulations. It is also has the scope to incorporate next-generation heterogenous supercomputing and AI acceleration infrustructures such as GPU and FPGAs.
+DeepFlame is a computational fluid dynamics suite for single or multiphase, laminar or turbulent reacting flows at all speeds with machine learning capabilities. It aims to provide an open-source platform bringing together the individual strengths of [OpenFOAM](https://openfoam.org), [Cantera](https://cantera.org) and [Torch](https://pytorch.org/) libraries for deep learning assisted reacting flow simulations. It is also has the scope to incorporate next-generation heterogenous supercomputing and AI acceleration infrustructures such as GPU and FPGAs.
 
 ## Dependencies
 [OpenFOAM-7](https://openfoam.org/version/7), [Cantera C++ lib 2.6.0](https://anaconda.org/conda-forge/libcantera-devel), [Torch lib 1.11.0](https://pytorch.org/)
@@ -14,13 +14,13 @@ New in v0.4.0 (2022/09/26):
 - laminar; EDC; PaSR combustion models
 
 New in v0.3.0 (2022/08/29):
-- 1/2/3D adaptive mesh refinement
+- 1/2/3D adaptive mesh refinement (2/3D adopted from [SOFTX_2018_143](https://github.com/ElsevierSoftwareX/SOFTX_2018_143))
 - Add Sigma/dynSmag LES turbulence models
 - Add functionObjects/field library
 - New example reactiveShockTube for dfHighSpeedFoam
 
 New in v0.2.0 (2022/07/25):
-- Dynamic load balancing for chemistry solver
+- Dynamic load balancing for chemistry solver (adopted from [DLBFoam](https://github.com/blttkgl/DLBFoam-1.0))
 
 From v0.1.0 (2022/06/15):
 - Native Cantera reader for chemical mechanisms in `.cti`, `.xml` or `.yaml` formats
