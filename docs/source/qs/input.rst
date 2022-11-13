@@ -18,7 +18,7 @@ The dictionary ``CanteraTorchProperties`` is the original dictionay of DeepFlame
     {
         constantProperty "pressure";
     }
-
+// add for testing
     torch on;
     GPU on;
     torchModel1 "ESH2-sub1.pt";
