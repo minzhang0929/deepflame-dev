@@ -38,7 +38,24 @@ SourceFiles
 #ifndef dfChemistryModel_H
 #define dfChemistryModel_H
 
+#ifdef USE_LIBTORCH
 #include <torch/script.h>
+#include "DNNInferencer.H"
+#include "GpuProblem.H"
+#include "GpuSolution.H"
+#include "DynamicBuffer.H"
+#endif
+
+#ifdef USE_PYTORCH
+#include <pybind11/embed.h>
+#include <pybind11/numpy.h>
+#include <pybind11/stl.h>
+#include <pybind11/stl_bind.h>
+#include "GpuProblem.H"
+#include "GpuSolution.H"
+#include "DynamicBuffer.H"
+#endif
+
 #include "CanteraMixture.H"
 #include "IOdictionary.H"
 #include "Switch.H"
@@ -108,15 +125,58 @@ public IOdictionary
     volScalarField& psi_;
     // heat release rate, [J/m^3/s]
     volScalarField Qdot_;
+    // DNN selection fields 
+    volScalarField selectDNN_;
 
+#if defined USE_LIBTORCH || defined USE_PYTORCH
+    bool useDNN;
     Switch torchSwitch_;
+    Switch gpu_;
+    Switch gpulog_;
+
+    scalar Tact1_;
+    scalar Qdotact1_;
+    scalar Tact2_;
+    scalar Qdotact2_;
+    scalar Tact3_;
+    scalar Qdotact3_;
+
+    // profiling 
+    double time_allsolve_;
+    double time_submaster_;
+    double time_sendProblem_;
+    double time_RecvProblem_;
+    double time_sendRecvSolution_;
+    double time_getDNNinputs_;
+    double time_DNNinference_;
+    double time_updateSolutionBuffer_;
+#endif
+
+#ifdef USE_LIBTORCH
+    DNNInferencer DNNInferencer_;
+    int cores_; // The number of cores per GPU when use libtorch
+    int GPUsPerNode_;
+
     word torchModelName_;
     scalarList Xmu_;
     scalarList Xstd_;
     scalarList Ymu_;
     scalarList Ystd_;
-    scalar Tact_;
     scalar Qdotact_;
+    scalar Tact_;
+
+    word torchModelName1_;
+    word torchModelName2_;
+    word torchModelName3_;  
+#endif
+
+#ifdef USE_PYTORCH
+    int cores_; // The number of cores per node when use pytorch
+
+    // profiling
+    double time_vec2ndarray_;
+    double time_python_;
+#endif
 
     // Load balancing object
     LoadBalancer balancer_;
@@ -142,10 +202,6 @@ public IOdictionary
         template<class DeltaTType>
         scalar canteraSolve(const DeltaTType& deltaT);
 
-        //- Solve the reaction system with Deep Neural Networks
-        template<class DeltaTType>
-        scalar torchSolve(const DeltaTType& deltaT);
-
         //- Solve a single ChemistryProblem and put the solution to ChemistrySolution
         void solveSingle(ChemistryProblem& problem, ChemistrySolution& solution);
 
@@ -169,7 +225,7 @@ public IOdictionary
 
         //- Solve the reaction system with DLB algorithm
         template<class DeltaTType>
-        scalar solve_loadBalance(const DeltaTType& deltaT);
+        scalar solve_CVODE(const DeltaTType& deltaT);
 
         //- Output logFiles
         Foam::autoPtr<Foam::OFstream> logFile(const word& name) const
@@ -178,6 +234,36 @@ public IOdictionary
             return autoPtr<OFstream>(new OFstream(
                 mesh_.time().path() / "loadBal" / this->group() / name));
         }
+
+#if defined USE_LIBTORCH || defined USE_PYTORCH
+        /*============= private methods in solve_DNN =============*/
+        //- get a list of GPU problems to be solved
+        template<class DeltaTType>
+        DynamicList<GpuProblem> getGPUProblems(const DeltaTType& deltaT);
+
+        //- get the input for DNN inference
+        void getDNNinputs(const DynamicBuffer<GpuProblem>& problemBuffer, std::vector<label>& outputlength,
+        std::vector<std::vector<double>>& DNNinputs, std::vector<DynamicBuffer<label>>& cellIDBuffer, 
+        std::vector<std::vector<label>>& problemCounter);
+
+        //- construct the output
+        void updateSolutionBuffer(DynamicBuffer<GpuSolution>& solutionBuffer, const std::vector<std::vector<double>>& results,
+        const std::vector<DynamicBuffer<label>>& cellIDBuffer, std::vector<std::vector<label>>& problemCounter);
+#endif
+
+#ifdef USE_LIBTORCH
+        //- DNN solver that support the use of GPU (multi-cards)
+        template<class DeltaTType>
+        scalar solve_DNN(const DeltaTType& deltaT);
+#endif
+
+#ifdef USE_PYTORCH
+        template<class DeltaTType>
+        scalar solve_DNN_GPU_oneCore(const DeltaTType& deltaT);
+
+        template<class DeltaTType>
+        scalar solve_DNN(const DeltaTType& deltaT);
+#endif
 
 public:
 
@@ -222,12 +308,31 @@ public:
 
         const volScalarField& rhoD(const label i) const {return rhoD_[i];}
 
-        volScalarField& hai(const label i) {return hai_[i];}
+        const volScalarField& hai(const label i) {return hai_[i];}
 
         // update T, psi, mu, alpha, rhoD, hai (if needed)
         void correctThermo();
 
         ThermoType& thermo() {return thermo_;}
+
+        const CanteraMixture& mixture() {return mixture_;}
+
+    // profiling
+#if defined USE_LIBTORCH || defined USE_PYTORCH
+    double time_allsolve() {return time_allsolve_;}
+    double time_submaster() {return time_submaster_;}
+    double time_sendProblem() {return time_sendProblem_;}
+    double time_RecvProblem() {return time_RecvProblem_;}
+    double time_sendRecvSolution() {return time_sendRecvSolution_;}
+    double time_getDNNinputs() {return time_getDNNinputs_;}
+    double time_DNNinference() {return time_DNNinference_;}
+    double time_updateSolutionBuffer() {return time_updateSolutionBuffer_;}
+#endif
+#ifdef USE_PYTORCH
+    double time_vec2ndarray() {return time_vec2ndarray_;}
+    double time_python() {return time_python_;}
+#endif
+
 };
 
 

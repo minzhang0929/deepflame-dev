@@ -3,6 +3,11 @@ if (!inviscid)
     hDiffCorrFlux = Zero;
     diffAlphaD = Zero;
     sumYDiffError = Zero;
+    
+    forAll(Y, i)
+    {
+        sumYDiffError += chemistry->rhoD(i)*fvc::grad(Y[i]);
+    }
 }
 
 tmp<fv::convectionScheme<scalar>> mvConvection
@@ -18,14 +23,14 @@ tmp<fv::convectionScheme<scalar>> mvConvection
 
 {
     start = std::clock();
-    chemistry.solve(mesh.time().deltaTValue());
+    combustion->correct();
     label flag_mpi_init;
     MPI_Initialized(&flag_mpi_init);
     if(flag_mpi_init) MPI_Barrier(PstreamGlobals::MPI_COMM_FOAM);
     end = std::clock();
     time_monitor_chem += double(end - start) / double(CLOCKS_PER_SEC);
 
-    volScalarField Yt(0*Y[0]);
+    volScalarField Yt(0.0*Y[0]);
 
     start = std::clock();
     forAll(Y, i)
@@ -39,20 +44,16 @@ tmp<fv::convectionScheme<scalar>> mvConvection
                  fvm::ddt(rho, Yi)
                + mvConvection->fvmDiv(phi, Yi)
               ==
-                 chemistry.RR(i)
+                combustion->R(Yi)
             );
 
             if (!inviscid)
             {
-                forAll(Y, i)
-                {
-                    sumYDiffError += chemistry.rhoD(i)*fvc::grad(Y[i]);
-                }
                 const surfaceScalarField phiUc = linearInterpolate(sumYDiffError) & mesh.Sf();
 
-                hDiffCorrFlux += chemistry.hai(i)*(chemistry.rhoD(i)*fvc::grad(Yi) - Yi*sumYDiffError);
-                diffAlphaD += fvc::laplacian(thermo.alpha()*chemistry.hai(i), Yi);
-                tmp<volScalarField> DEff = chemistry.rhoD(i) + turbulence->mut()/Sct;
+                hDiffCorrFlux += chemistry->hai(i)*(chemistry->rhoD(i)*fvc::grad(Yi) - Yi*sumYDiffError);
+                diffAlphaD += fvc::laplacian(thermo.alpha()*chemistry->hai(i), Yi);
+                tmp<volScalarField> DEff = chemistry->rhoD(i) + turbulence->mut()/Sct;
 
                 YiEqn -= fvm::laplacian(DEff(), Yi) - mvConvection->fvmDiv(phiUc, Yi);
             }

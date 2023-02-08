@@ -37,6 +37,17 @@ Description
 #include "CanteraMixture.H"
 #include "hePsiThermo.H"
 
+#ifdef USE_PYTORCH
+#include <pybind11/embed.h>
+#include <pybind11/numpy.h>
+#include <pybind11/stl.h> //used to convert
+#endif
+
+#ifdef USE_LIBTORCH
+#include <torch/script.h>
+#include "DNNInferencer.H"
+#endif
+
 #include "fvCFD.H"
 #include "fluidThermo.H"
 #include "turbulentFluidThermoModel.H"
@@ -52,9 +63,16 @@ Description
 
 int main(int argc, char *argv[])
 {
+#ifdef USE_PYTORCH
+    pybind11::scoped_interpreter guard{};//start python interpreter
+#endif
     #include "postProcess.H"
 
-    #include "setRootCaseLists.H"
+    // #include "setRootCaseLists.H"
+    #include "listOptions.H"
+    #include "setRootCase2.H"
+    #include "listOutput.H"
+
     #include "createTime.H"
     #include "createMesh.H"
     #include "createDyMControls.H"
@@ -67,6 +85,8 @@ int main(int argc, char *argv[])
     double time_monitor_Y=0;
     double time_monitor_E=0;
     double time_monitor_corrThermo=0;
+    double time_monitor_corrDiff=0;
+    label timeIndex = 0;
     clock_t start, end;
 
     turbulence->validate();
@@ -83,6 +103,8 @@ int main(int argc, char *argv[])
 
     while (runTime.run())
     {
+        timeIndex ++;
+
         #include "readDyMControls.H"
 
         if (LTS)
@@ -102,6 +124,10 @@ int main(int argc, char *argv[])
         // --- Pressure-velocity PIMPLE corrector loop
         while (pimple.loop())
         {
+            if (splitting)
+            {
+                #include "YEqn_RR.H"
+            }
             if (pimple.firstPimpleIter() || moveMeshOuterCorrectors)
             {
                 // Store momentum to set rhoUf for introduced faces.
@@ -122,17 +148,24 @@ int main(int argc, char *argv[])
             end = std::clock();
             time_monitor_flow += double(end - start) / double(CLOCKS_PER_SEC);
 
-            #include "YEqn.H"
+            if(combModelName!="ESF" && combModelName!="flareFGM" )
+            {
+                #include "YEqn.H"
 
-            start = std::clock();
-            #include "EEqn.H"
-            end = std::clock();
-            time_monitor_E += double(end - start) / double(CLOCKS_PER_SEC);
+                start = std::clock();
+                #include "EEqn.H"
+                end = std::clock();
+                time_monitor_E += double(end - start) / double(CLOCKS_PER_SEC);
 
-            start = std::clock();
-            chemistry->correctThermo();
-            end = std::clock();
-            time_monitor_corrThermo += double(end - start) / double(CLOCKS_PER_SEC);
+                start = std::clock();
+                chemistry->correctThermo();
+                end = std::clock();
+                time_monitor_corrThermo += double(end - start) / double(CLOCKS_PER_SEC);
+            }
+            else
+            {
+                combustion->correct();
+            }
 
             Info<< "min/max(T) = " << min(T).value() << ", " << max(T).value() << endl;
 
@@ -163,15 +196,47 @@ int main(int argc, char *argv[])
 
         runTime.write();
 
-        Info<< "MonitorTime_chem = " << time_monitor_chem << " s" << nl << endl;
-        Info<< "MonitorTime_Y = " << time_monitor_Y << " s" << nl << endl;
-        Info<< "MonitorTime_flow = " << time_monitor_flow << " s" << nl << endl;
-        Info<< "MonitorTime_E = " << time_monitor_E << " s" << nl << endl;
-        Info<< "MonitorTime_corrThermo = " << time_monitor_corrThermo << " s" << nl << endl;
+        Info << "output time index " << runTime.timeIndex() << endl;
+
+        Info<< "========Time Spent in diffenet parts========"<< endl;
+        Info<< "Chemical sources           = " << time_monitor_chem << " s" << endl;
+        Info<< "Species Equations          = " << time_monitor_Y << " s" << endl;
+        Info<< "U & p Equations            = " << time_monitor_flow << " s" << endl;
+        Info<< "Energy Equations           = " << time_monitor_E << " s" << endl;
+        Info<< "thermo & Trans Properties  = " << time_monitor_corrThermo << " s" << endl;
+        Info<< "Diffusion Correction Time  = " << time_monitor_corrDiff << " s" << endl;
+        Info<< "sum Time                   = " << (time_monitor_chem + time_monitor_Y + time_monitor_flow + time_monitor_E + time_monitor_corrThermo + time_monitor_corrDiff) << " s" << endl;
+        Info<< "============================================"<<nl<< endl;
 
         Info<< "ExecutionTime = " << runTime.elapsedCpuTime() << " s"
-            << "  ClockTime = " << runTime.elapsedClockTime() << " s"
-            << nl << endl;
+            << "  ClockTime = " << runTime.elapsedClockTime() << " s" << endl;
+#ifdef USE_PYTORCH
+        if (log_ && torch_)
+        {
+            Info<< "    allsolveTime = " << chemistry->time_allsolve() << " s"
+            << "    submasterTime = " << chemistry->time_submaster() << " s" << nl
+            << "    sendProblemTime = " << chemistry->time_sendProblem() << " s"
+            << "    recvProblemTime = " << chemistry->time_RecvProblem() << " s"
+            << "    sendRecvSolutionTime = " << chemistry->time_sendRecvSolution() << " s" << nl
+            << "    getDNNinputsTime = " << chemistry->time_getDNNinputs() << " s"
+            << "    DNNinferenceTime = " << chemistry->time_DNNinference() << " s"
+            << "    updateSolutionBufferTime = " << chemistry->time_updateSolutionBuffer() << " s" << nl
+            << "    vec2ndarrayTime = " << chemistry->time_vec2ndarray() << " s"
+            << "    pythonTime = " << chemistry->time_python() << " s"<< nl << endl;
+        }
+#endif
+#ifdef USE_LIBTORCH
+        if (log_ && torch_)
+        {
+            Info<< "    allsolveTime = " << chemistry->time_allsolve() << " s"
+            << "    submasterTime = " << chemistry->time_submaster() << " s" << nl
+            << "    sendProblemTime = " << chemistry->time_sendProblem() << " s"
+            << "    recvProblemTime = " << chemistry->time_RecvProblem() << " s"
+            << "    sendRecvSolutionTime = " << chemistry->time_sendRecvSolution() << " s" << nl
+            << "    DNNinferenceTime = " << chemistry->time_DNNinference() << " s"
+            << "    updateSolutionBufferTime = " << chemistry->time_updateSolutionBuffer() << " s" << nl;
+        }
+#endif
     }
 
     Info<< "End\n" << endl;

@@ -1,4 +1,12 @@
+-include $(GENERAL_RULES)/mplibType
+
 EXE_INC = -std=c++14 \
+    -Wno-unused-variable \
+    -Wno-unused-but-set-variable \
+    -Wno-old-style-cast \
+    $(PFLAGS) $(PINC) \
+    $(if $(LIBTORCH_ROOT),-DUSE_LIBTORCH,) \
+    $(if $(PYTHON_INC_DIR),-DUSE_PYTORCH,) \
     -I$(LIB_SRC)/transportModels/compressible/lnInclude \
     -I$(LIB_SRC)/thermophysicalModels/basic/lnInclude \
     -I$(LIB_SRC)/TurbulenceModels/turbulenceModels/lnInclude \
@@ -7,12 +15,18 @@ EXE_INC = -std=c++14 \
     -I$(LIB_SRC)/finiteVolume/lnInclude \
     -I$(LIB_SRC)/meshTools/lnInclude \
     -I$(LIB_SRC)/sampling/lnInclude \
+    -I$(LIB_SRC)/Pstream/mpi \
     -I$(LIB_SRC)/dynamicFvMesh/lnInclude \
-    -I$(DF_SRC)/CanteraMixture/lnInclude \
+    -I$(DF_SRC)/dfCanteraMixture/lnInclude \
     -I$(DF_SRC)/dfChemistryModel/lnInclude \
     -I$(CANTERA_ROOT)/include \
-    -I$(TORCH_ROOT)/include \
-    -I$(TORCH_ROOT)/include/torch/csrc/api/include
+    $(if $(LIBTORCH_ROOT),-I$(LIBTORCH_ROOT)/include,) \
+    $(if $(LIBTORCH_ROOT),-I$(LIBTORCH_ROOT)/include/torch/csrc/api/include,) \
+    $(if $(BOOST_ARCH_PATH),-I$(BOOST_ARCH_PATH),) \
+    $(if $(BOOST_ARCH_PATH),-DBOOST_ARCH_PATH_FOUNDD,) \
+    $(PYTHON_INC_DIR)
+
+
 
 EXE_LIBS = \
     -lcompressibleTransportModels \
@@ -22,13 +36,16 @@ EXE_LIBS = \
     -ltopoChangerFvMesh \
     -lmeshTools \
     -lsampling \
-    -L$(FOAM_USER_LIBBIN) \
+    -L$(DF_LIBBIN) \
     -ldfFluidThermophysicalModels \
     -ldfCompressibleTurbulenceModels \
-    -lCanteraMixture \
+    -ldfCanteraMixture \
     -ldfChemistryModel \
     $(CANTERA_ROOT)/lib/libcantera.so \
-    $(TORCH_ROOT)/lib/libtorch.so \
-    $(TORCH_ROOT)/lib/libc10.so \
-    -rdynamic \
-    -lpthread
+    $(if $(LIBTORCH_ROOT),$(LIBTORCH_ROOT)/lib/libtorch.so,) \
+    $(if $(LIBTORCH_ROOT),$(LIBTORCH_ROOT)/lib/libc10.so,) \
+    $(if $(LIBTORCH_ROOT),-rdynamic,) \
+    $(if $(LIBTORCH_ROOT),-lpthread,) \
+    $(if $(LIBTORCH_ROOT),$(DF_SRC)/dfChemistryModel/DNNInferencer/build/libDNNInferencer.so,) \
+    $(if $(PYTHON_LIB_DIR),-L$(PYTHON_LIB_DIR),) \
+    $(if $(PYTHON_LIB_DIR),-lpython3.8,)

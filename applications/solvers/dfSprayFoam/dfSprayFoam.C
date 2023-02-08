@@ -34,6 +34,17 @@ Description
 #include "hePsiThermo.H"
 #include "turbulentFluidThermoModel.H"
 
+#ifdef USE_PYTORCH
+#include <pybind11/embed.h>
+#include <pybind11/numpy.h>
+#include <pybind11/stl.h> //used to convert
+#endif
+
+#ifdef USE_LIBTORCH
+#include <torch/script.h>
+#include "DNNInferencer.H"
+#endif 
+
 #include "fvCFD.H"
 #include "dynamicFvMesh.H"
 #include "turbulenceModel.H"
@@ -50,9 +61,16 @@ Description
 
 int main(int argc, char *argv[])
 {
+#ifdef USE_PYTORCH
+    pybind11::scoped_interpreter guard{};//start python interpreter
+#endif
     #include "postProcess.H"
 
-    #include "setRootCaseLists.H"
+    // #include "setRootCaseLists.H"
+    #include "listOptions.H"
+    #include "setRootCase2.H"
+    #include "listOutput.H"
+    
     #include "createTime.H"
     #include "createDynamicFvMesh.H"
     #include "createDyMControls.H"
