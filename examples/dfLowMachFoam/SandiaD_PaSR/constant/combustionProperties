@@ -1,0 +1,81 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Version:  7
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      combustionProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+combustionModel  dummy;//PaSR;
+
+EDCCoeffs
+{
+    version v2005;
+}
+
+PaSRCoeffs
+{
+
+   mixingScale
+   {
+      type   geometriMeanScale;//globalScale,kolmogorovScale,geometriMeanScale,dynamicScale 
+      
+      globalScaleCoeffs
+      {
+	Cmix  0.01;
+      } 
+
+     dynamicScaleCoeffs
+     {
+       transportChi false;
+       Cd1          1.1;
+       Cd2          0.8;
+       Cp1          0.9;
+       Cp2          0.72;
+     }	     
+
+   }
+
+
+   chemistryScale
+   {
+      type  globalConvertion;//formationRate,globalConvertion
+
+      globalConvertionCoeffs
+      {
+	 fuel CH4;
+	 oxidizer O2;
+      }
+
+      formationRateCoeffs
+      {
+	 fuel CH4;
+         oxidizer O2;
+      }
+
+   }
+
+}
+
+flareFGMCoeffs
+{
+  speciesName ("CO");
+  combustion on;
+  ignition on;
+  ignBeginTime 0.2;
+  ignDurationTime  0.21;
+  x0               0.01;
+  y0               0.0;
+  z0               0.05;
+  R0               0.008;
+}
+// ************************************************************************* //
